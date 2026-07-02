@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"React로 다크모드 토글 만드는 법 알려줘."},"uuid":"u1","timestamp":"2026-07-01T14:03:00.000Z","cwd":"/home/demo/project","gitBranch":"feature/theme","version":"2.1.0"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"localStorage에 테마를 저장하고 <html>의 data-theme를 바꾸는 방식이 간단합니다. useState + useEffect로 구현할 수 있어요."}]},"uuid":"a1","timestamp":"2026-07-01T14:03:20.000Z","cwd":"/home/demo/project"}

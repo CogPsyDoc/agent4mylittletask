@@ -1,0 +1,17 @@
+{
+  "name": "cowork-sync",
+  "version": "0.1.0",
+  "description": "Claude Code 대화(JSONL 세션)를 어느 기기에서도 보고 정리하는 웹앱",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
