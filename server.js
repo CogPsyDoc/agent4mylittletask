@@ -10,6 +10,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findSessionFiles, parseSessionFile } from './lib/parser.js';
 import { MetaStore } from './lib/store.js';
+import {
+  CHAT_MODEL,
+  ContinuationStore,
+  buildHistory,
+  isChatEnabled,
+  toApiMessages,
+} from './lib/chat.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +36,7 @@ if (!fs.existsSync(TRANSCRIPTS_DIR)) {
 }
 
 const store = new MetaStore(path.join(__dirname, 'data', 'metadata.json'));
+const continuations = new ContinuationStore(path.join(__dirname, 'data', 'continuations.json'));
 
 // ---- 세션 캐시 ----
 // 파싱은 비용이 있으니 목록/본문을 캐시하고, TTL 지나면 다시 스캔.
@@ -90,12 +98,90 @@ app.get('/api/sessions', async (req, res) => {
   });
 });
 
-// 세션 본문
+// 세션 본문 (+ 이어진 대화 병합)
 app.get('/api/sessions/:id', async (req, res) => {
   const { byId } = await scan();
   const s = byId.get(req.params.id);
   if (!s) return res.status(404).json({ error: 'not found' });
-  res.json({ ...toSummary(s), messages: s.messages });
+  const extra = continuations.get(s.id).map((c) => ({
+    role: c.role,
+    blocks: [{ type: 'text', text: c.text }],
+    timestamp: c.timestamp,
+    isMeta: false,
+    continued: true,
+  }));
+  res.json({ ...toSummary(s), messages: [...s.messages, ...extra] });
+});
+
+// 앱 설정 (프론트가 채팅 활성화 여부 확인용)
+app.get('/api/config', (req, res) => {
+  res.json({ chatEnabled: isChatEnabled(), model: CHAT_MODEL });
+});
+
+// 이어서 대화하기 — SSE로 응답을 스트리밍
+app.post('/api/sessions/:id/continue', async (req, res) => {
+  if (!isChatEnabled()) {
+    return res.status(503).json({
+      error: 'ANTHROPIC_API_KEY가 설정되어 있지 않아요. 키를 설정하면 이어서 대화할 수 있습니다.',
+    });
+  }
+  const userText = String(req.body?.message || '').trim();
+  if (!userText) return res.status(400).json({ error: 'message가 비어 있어요.' });
+
+  const { byId } = await scan();
+  const s = byId.get(req.params.id);
+  if (!s) return res.status(404).json({ error: 'not found' });
+
+  const history = buildHistory(s, continuations.get(s.id));
+  history.push({ role: 'user', content: userText });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+  const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
+    const client = new Anthropic();
+
+    let fullText = '';
+    const stream = client.messages.stream({
+      model: CHAT_MODEL,
+      max_tokens: 16000,
+      thinking: { type: 'adaptive' },
+      system:
+        '이 대화는 Claude Code 세션에서 이어진 것입니다. 이전 맥락을 참고해 자연스럽게 이어서 답하세요. ' +
+        '단, 지금은 도구를 실행할 수 없는 일반 대화 환경입니다.',
+      messages: toApiMessages(history),
+    });
+
+    stream.on('text', (delta) => {
+      fullText += delta;
+      send('delta', { text: delta });
+    });
+
+    const final = await stream.finalMessage();
+
+    if (final.stop_reason === 'refusal') {
+      send('error', { message: '안전상의 이유로 이 요청에는 답할 수 없어요.' });
+    } else {
+      continuations.append(s.id, { role: 'user', text: userText, timestamp: new Date().toISOString() });
+      continuations.append(s.id, { role: 'assistant', text: fullText, timestamp: new Date().toISOString() });
+      send('done', {
+        stopReason: final.stop_reason,
+        usage: {
+          input: final.usage.input_tokens,
+          output: final.usage.output_tokens,
+          cacheRead: final.usage.cache_read_input_tokens,
+        },
+      });
+    }
+  } catch (err) {
+    console.error('[cowork-sync] continue 실패:', err.message);
+    send('error', { message: err.message });
+  }
+  res.end();
 });
 
 // 정리 메타 업데이트

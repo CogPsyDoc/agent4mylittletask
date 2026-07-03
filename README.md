@@ -6,8 +6,8 @@ Claude Code(CLI/웹)는 대화 세션을 `~/.claude/projects/**/*.jsonl` 파일�
 Cowork Sync는 그 파일들을 읽어 브라우저에서 보여주고, 폴더·태그·즐겨찾기·검색으로 정리할 수 있게 해줍니다.
 서버를 한 대 띄워 두면 폰·태블릿·PC 등 **같은 네트워크의 어느 기기 브라우저에서든** 접속해서 지난 대화를 이어볼 수 있어요.
 
-> ⚠️ **읽기(뷰어) 전용입니다.** 지난 대화를 보고 정리하는 데 초점이 맞춰져 있어요.
-> 앱 안에서 Claude에게 **새 메시지를 보내 답을 받는 기능**은 Anthropic API 키가 필요하며, 지금은 포함돼 있지 않습니다. (아래 "다음 단계" 참고)
+> 💬 **이어서 대화하기**: 서버에 `ANTHROPIC_API_KEY`를 설정하면 앱 안에서 지난 대화를 그대로 이어서
+> Claude와 대화할 수 있어요 (키가 없어도 뷰어/정리 기능은 전부 동작합니다). 아래 "이어서 대화하기" 참고.
 
 ---
 
@@ -34,6 +34,23 @@ npm start
 - **Cloudflare Tunnel** — `cloudflared tunnel --url http://localhost:4317`
 - **ngrok** — `ngrok http 4317`
 
+## 이어서 대화하기
+
+1. [console.anthropic.com](https://console.anthropic.com)에서 API 키를 발급받고 크레딧을 충전합니다 ($5면 충분히 시작).
+2. 서버를 키와 함께 실행:
+
+   ```bash
+   ANTHROPIC_API_KEY=sk-ant-... npm start
+   ```
+
+3. 대화 상세 화면 하단에 입력창이 나타납니다. 지난 대화의 맥락(도구 실행 내역 포함)을
+   자동으로 실어 보내므로 정말 "이어서" 대화가 됩니다.
+
+- 이어진 대화는 `data/continuations.json`에 저장되고 원본 트랜스크립트는 건드리지 않습니다.
+- 응답은 실시간 스트리밍으로 표시됩니다.
+- 매 턴 히스토리 앞부분에 프롬프트 캐싱을 적용해 반복 비용을 줄입니다.
+- 모델은 `CLAUDE_MODEL`로 변경 가능 (기본 `claude-opus-4-8`; 저렴하게는 `claude-haiku-4-5`).
+
 ## 설정 (`.env` 또는 환경변수)
 
 | 변수 | 기본값 | 설명 |
@@ -42,6 +59,9 @@ npm start
 | `PORT` | `4317` | 서버 포트 |
 | `HOST` | `0.0.0.0` | 바인딩 호스트 |
 | `CACHE_TTL_MS` | `5000` | 세션 목록 캐시 유효시간 |
+| `ANTHROPIC_API_KEY` | (없음) | 설정 시 "이어서 대화하기" 활성화 |
+| `CLAUDE_MODEL` | `claude-opus-4-8` | 이어서 대화에 쓸 모델 |
+| `MAX_HISTORY_CHARS` | `400000` | API로 보낼 히스토리 길이 상한(문자) |
 
 `.env.example`를 참고하세요.
 
@@ -49,6 +69,7 @@ npm start
 
 ## 기능
 
+- 💬 **이어서 대화하기** — 지난 세션의 맥락을 그대로 실어 Claude와 계속 대화 (API 키 필요, 스트리밍)
 - 📃 모든 Claude Code 세션을 최근순으로 나열, 프로젝트/브랜치 표시
 - 🔎 제목·미리보기·**본문 전체 텍스트**·태그 검색 (스니펫 하이라이트)
 - 🗂 폴더 지정, #태그, ⭐ 즐겨찾기, 커스텀 제목 — 내 맘대로 정리 (자동 저장)
@@ -76,6 +97,8 @@ npm start
 | GET | `/api/sessions` | 세션 목록(요약) |
 | GET | `/api/sessions/:id` | 세션 본문 |
 | PATCH | `/api/sessions/:id/meta` | 정리 메타 수정 |
+| POST | `/api/sessions/:id/continue` | 이어서 대화 (SSE 스트리밍) |
+| GET | `/api/config` | 채팅 활성화 여부/모델 |
 | GET | `/api/search?q=` | 전체 검색 |
 | GET | `/api/facets` | 폴더/태그/프로젝트 목록 |
 
@@ -83,7 +106,6 @@ npm start
 
 ## 다음 단계 (원하면 확장)
 
-- **앱 안에서 이어서 대화하기**: Anthropic API 키를 붙여 `/api/sessions/:id/continue`로
-  세션 히스토리를 그대로 실어 Claude에 이어 보내는 기능. (키 발급: console.anthropic.com)
 - **클라우드 배포 + 자동 업로드**: 로컬 트랜스크립트를 주기적으로 서버로 동기화해 인터넷 어디서든 접속
 - **다중 사용자/로그인**: 여러 사람이 각자 계정으로 쓰도록 인증 추가
+- **이어진 대화에서 도구 사용**: 지금 이어서 대화는 일반 채팅 (파일 읽기/실행 없음)

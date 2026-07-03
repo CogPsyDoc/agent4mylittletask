@@ -17,6 +17,8 @@ const state = {
   sessions: [],
   filter: { text: '', folder: null, project: null, tag: null, favorite: false },
   activeId: null,
+  chatEnabled: false,
+  model: '',
 };
 
 const listEl = $('#list');
@@ -212,18 +214,116 @@ function renderDetail(s) {
   const msgs = el('div', { class: 'messages' });
   for (const m of s.messages) {
     if (m.isMeta) continue; // system-reminder 등 잡음 숨김
-    const who = m.role === 'user' ? '나' : m.role === 'assistant' ? 'Claude' : '도구';
-    const bubble = el('div', { class: 'bubble' });
-    for (const b of m.blocks) renderBlock(bubble, b);
-    if (!bubble.childNodes.length) continue;
-    msgs.append(el('div', { class: 'msg ' + m.role }, [
-      el('div', { class: 'who' }, [el('span', { class: 'dot' }), who, m.timestamp ? el('span', { style: 'text-transform:none' }, fmtDate(m.timestamp)) : null]),
-      bubble,
-    ]));
+    appendMessage(msgs, m);
   }
 
-  detailEl.replaceChildren(head, msgs);
+  const children = [head, msgs];
+  if (state.chatEnabled) {
+    children.push(renderComposer(s.id, msgs));
+  } else {
+    children.push(el('div', { class: 'composer-disabled' },
+      '💡 서버에 ANTHROPIC_API_KEY를 설정하면 여기서 이어서 대화할 수 있어요.'));
+  }
+
+  detailEl.replaceChildren(...children);
   detailEl.scrollTop = 0;
+}
+
+function appendMessage(msgs, m) {
+  const who = m.role === 'user' ? '나' : m.role === 'assistant' ? 'Claude' : '도구';
+  const bubble = el('div', { class: 'bubble' });
+  for (const b of m.blocks) renderBlock(bubble, b);
+  if (!bubble.childNodes.length) return null;
+  const node = el('div', { class: 'msg ' + m.role + (m.continued ? ' continued' : '') }, [
+    el('div', { class: 'who' }, [
+      el('span', { class: 'dot' }),
+      who,
+      m.timestamp ? el('span', { style: 'text-transform:none' }, fmtDate(m.timestamp)) : null,
+      m.continued ? el('span', { class: 'cont-badge' }, '이어진 대화') : null,
+    ]),
+    bubble,
+  ]);
+  msgs.append(node);
+  return node;
+}
+
+// ---------- 이어서 대화 ----------
+function renderComposer(sessionId, msgs) {
+  const input = el('textarea', {
+    class: 'composer-input',
+    placeholder: '이어서 대화하기… (Enter 전송, Shift+Enter 줄바꿈)',
+    rows: '1',
+  });
+  const btn = el('button', { class: 'composer-send', title: '전송' }, '➤');
+  const wrap = el('div', { class: 'composer' }, [input, btn]);
+
+  const submit = () => {
+    const text = input.value.trim();
+    if (!text || wrap.classList.contains('busy')) return;
+    input.value = '';
+    sendContinue(sessionId, text, msgs, wrap);
+  };
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  return wrap;
+}
+
+async function sendContinue(sessionId, text, msgs, composer) {
+  composer.classList.add('busy');
+
+  appendMessage(msgs, { role: 'user', blocks: [{ type: 'text', text }], continued: true });
+
+  const pending = { role: 'assistant', blocks: [{ type: 'text', text: '' }], continued: true };
+  const node = appendMessage(msgs, { ...pending, blocks: [{ type: 'text', text: '…' }] });
+  const textEl = node.querySelector('.block');
+  detailEl.scrollTop = detailEl.scrollHeight;
+
+  try {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/continue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+
+    // SSE 파싱
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let full = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const events = buf.split('\n\n');
+      buf = events.pop();
+      for (const raw of events) {
+        const eventLine = raw.split('\n').find((l) => l.startsWith('event: '));
+        const dataLine = raw.split('\n').find((l) => l.startsWith('data: '));
+        if (!eventLine || !dataLine) continue;
+        const type = eventLine.slice(7).trim();
+        const data = JSON.parse(dataLine.slice(6));
+        if (type === 'delta') {
+          full += data.text;
+          textEl.textContent = full;
+          detailEl.scrollTop = detailEl.scrollHeight;
+        } else if (type === 'error') {
+          throw new Error(data.message);
+        }
+      }
+    }
+    if (!full) textEl.textContent = '(응답 없음)';
+  } catch (err) {
+    textEl.textContent = '⚠ ' + err.message;
+  } finally {
+    composer.classList.remove('busy');
+    composer.querySelector('.composer-input').focus();
+  }
 }
 
 function renderBlock(parent, b) {
@@ -264,5 +364,6 @@ searchEl.addEventListener('input', (e) => {
 $('#menuBack').addEventListener('click', () => appEl.setAttribute('data-view', 'list'));
 
 // 주기적으로 목록 갱신 (진행 중 세션이 늘어나도 반영)
+api('/api/config').then((c) => { state.chatEnabled = c.chatEnabled; state.model = c.model; }).catch(() => {});
 loadSessions().catch((e) => { listEl.textContent = '불러오기 실패: ' + e.message; });
 setInterval(() => { if (!state.filter.text) loadSessions().catch(() => {}); }, 15000);
