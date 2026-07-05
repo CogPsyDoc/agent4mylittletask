@@ -1,0 +1,51 @@
+# 우리 아기 하루하루 (BabyDays)
+
+아이의 탄생을 기억하고 하루하루의 성장을 기록하는 앱입니다.
+Mac의 **Swift Playground** 앱에서 바로 열어 실행할 수 있는 `.swiftpm` 프로젝트예요.
+
+기획 문서: [PLAN.md](PLAN.md)
+
+## 기능
+
+- **생후 일수**: 앱을 열면 "태어난 지 ㅇㅇ일"이 가장 크게 보여요 (태어난 날 = 1일)
+- **달력 기록**: 날짜를 골라 글을 쓰고 사진·영상을 여러 개 첨부 (분량 제한 없음, 영상은 인라인 재생)
+- **기념일 자동 계산**: 50일 · 백일 · 200일 · 300일 · 첫돌 · 매년 생일을 D-day로 표시, 달력에 🎉 뱃지
+- **성장 기록**: 키/몸무게를 입력하면 추이 그래프로 확인
+- **탄생 이야기**: 탄생 사진, 태어난 시간·장소, 출생 키/몸무게, 아이에게 보내는 첫 편지
+
+## Mac에서 실행하는 방법
+
+1. 이 저장소를 내려받아 `baby-growth-tracker/BabyDays.swiftpm` 폴더를 Mac에 둡니다.
+   (GitHub에서 **Code > Download ZIP**으로 받으면 됩니다)
+2. Mac에서 **Swift Playground** 앱을 엽니다 (App Store에서 무료 설치, 버전 4.2 이상 권장).
+3. **파일 > 열기…** 에서 `BabyDays.swiftpm`을 선택합니다.
+4. **▶ (실행)** 버튼을 누르면 앱이 실행됩니다.
+5. 첫 실행 시 아이 이름과 생년월일을 등록하면 시작돼요.
+
+> 참고: Swift Playground의 앱 프로젝트 규격상 패키지는 iPadOS 앱 형식(`.iOSApplication`)으로
+> 정의되지만, Mac의 Swift Playground에서 그대로 창 앱으로 실행됩니다.
+> 그래서 UI 코드는 `NSImage` 대신 `UIImage`를 사용합니다.
+
+## 데이터 저장 위치
+
+- 모든 기록은 앱 샌드박스 안의 `Documents/store.json`에, 첨부한 사진·영상은
+  `Documents/Media/` 폴더에 원본이 복사되어 저장됩니다 (변경 즉시 자동 저장).
+- 외부 서버 없이 전부 로컬에만 저장됩니다.
+- **앱(프로젝트 실행 컨테이너)을 삭제하면 데이터도 함께 삭제**되니,
+  백업이 필요하면 해당 컨테이너 폴더를 복사해 두세요.
+
+## 파일 구성
+
+| 파일 | 역할 |
+|------|------|
+| `Package.swift` | Swift Playground 앱 매니페스트 |
+| `BabyDaysApp.swift` | 앱 진입점, 사이드바 내비게이션 |
+| `Models.swift` | 데이터 모델, 생후 일수·기념일 계산 |
+| `Store.swift` | JSON 저장/불러오기, 미디어 파일 관리 |
+| `OnboardingView.swift` | 첫 실행 시 아이 등록 |
+| `HomeView.swift` | 생후 일수 + 다가오는 기념일 + 오늘 기록 |
+| `CalendarView.swift` | 월간 달력 그리드 |
+| `RecordEditorView.swift` | 하루 기록 편집 (글/사진/영상) |
+| `GrowthView.swift` | 키/몸무게 입력과 그래프 |
+| `BirthStoryView.swift` | 탄생 이야기 페이지 |
+| `MediaViews.swift` | 이미지/영상 표시 공용 뷰 |
