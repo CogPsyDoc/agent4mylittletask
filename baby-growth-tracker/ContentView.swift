@@ -6,7 +6,7 @@
 //
 // 기능: 생후 일수(태어난 날 = 1일) · 달력 기록(글/사진/영상) ·
 //       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기
-// 첨부: 파일 선택 + 사진 앱/Finder에서 드래그&드롭 + 클립보드 붙여넣기
+// 첨부: 사진 보관함 선택 + 파일 선택 + 드래그&드롭 + 클립보드 붙여넣기
 // 저장: 앱 샌드박스 Documents/store.json + Documents/Media/ (변경 즉시 자동 저장)
 
 import SwiftUI
@@ -14,6 +14,7 @@ import Foundation
 import Charts
 import AVKit
 import UIKit
+import PhotosUI
 import UniformTypeIdentifiers
 
 // MARK: - 진입점
@@ -420,7 +421,13 @@ final class Store: ObservableObject {
                 try FileManager.default.copyItem(at: url, to: mediaFileURL(fileName))
                 result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
             } catch {
-                print("미디어 복사 실패: \(error)")
+                // 복사가 막히면 데이터로 읽어서 쓰는 경로를 한 번 더 시도한다
+                if let data = try? Data(contentsOf: url),
+                   (try? data.write(to: mediaFileURL(fileName))) != nil {
+                    result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
+                } else {
+                    print("미디어 복사 실패: \(error)")
+                }
             }
         }
         return result
@@ -439,11 +446,28 @@ final class Store: ObservableObject {
         }
     }
 
+    /// 사진 보관함 등에서 받은 원본 데이터를 확장자 그대로 저장한다.
+    func addMediaData(_ data: Data, fileExtension: String, type: MediaType) -> MediaAttachment? {
+        let fileName = UUID().uuidString + "." + fileExtension
+        do {
+            try data.write(to: mediaFileURL(fileName))
+            return MediaAttachment(id: UUID(), fileName: fileName, type: type)
+        } catch {
+            print("미디어 저장 실패: \(error)")
+            return nil
+        }
+    }
+
     func setCoverPhoto(from url: URL) {
+        replaceCoverPhoto(with: importAttachments(from: [url]).first)
+    }
+
+    func replaceCoverPhoto(with attachment: MediaAttachment?) {
+        guard let attachment else { return }
         if let old = data.story.coverPhotoFileName {
             try? FileManager.default.removeItem(at: mediaFileURL(old))
         }
-        data.story.coverPhotoFileName = importAttachments(from: [url]).first?.fileName
+        data.story.coverPhotoFileName = attachment.fileName
     }
 
     // MARK: - 성장 기록
@@ -859,6 +883,7 @@ struct RecordEditorView: View {
     @State private var confirmingDelete = false
     @State private var viewingPhoto: MediaAttachment?
     @State private var dropTargeted = false
+    @State private var pickerItems: [PhotosPickerItem] = []
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -989,10 +1014,16 @@ struct RecordEditorView: View {
 
     private var addButtons: some View {
         HStack(spacing: 12) {
+            PhotosPicker(
+                selection: $pickerItems,
+                matching: .any(of: [.images, .videos])
+            ) {
+                Label("사진 보관함", systemImage: "photo.stack")
+            }
             Button {
                 showingImporter = true
             } label: {
-                Label("파일에서 추가", systemImage: "photo.on.rectangle.angled")
+                Label("파일에서", systemImage: "folder")
             }
             Button(action: pasteFromClipboard) {
                 Label("붙여넣기", systemImage: "doc.on.clipboard")
@@ -1000,6 +1031,29 @@ struct RecordEditorView: View {
         }
         .buttonStyle(.bordered)
         .tint(Theme.accent)
+        .onChange(of: pickerItems) { items in
+            guard !items.isEmpty else { return }
+            Task {
+                var new: [MediaAttachment] = []
+                for item in items {
+                    let isVideo = item.supportedContentTypes.contains {
+                        $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent)
+                    }
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                    let ext = item.supportedContentTypes.first?.preferredFilenameExtension
+                        ?? (isVideo ? "mov" : "jpg")
+                    if let attachment = store.addMediaData(
+                        data,
+                        fileExtension: ext,
+                        type: isVideo ? .video : .photo
+                    ) {
+                        new.append(attachment)
+                    }
+                }
+                appendAttachments(new)
+                pickerItems = []
+            }
+        }
     }
 
     private var dropZone: some View {
@@ -1249,6 +1303,8 @@ struct BirthStoryView: View {
     @EnvironmentObject private var store: Store
 
     @State private var showingPhotoImporter = false
+    @State private var coverPickerItem: PhotosPickerItem?
+    @State private var coverDropTargeted = false
     @State private var heightText = ""
     @State private var weightText = ""
     @State private var letter = ""
@@ -1289,37 +1345,109 @@ struct BirthStoryView: View {
         if let weight = store.data.story.birthWeightKg { weightText = String(weight) }
     }
 
-    @ViewBuilder
     private var coverSection: some View {
-        if let fileName = store.data.story.coverPhotoFileName {
-            VStack(spacing: 8) {
-                StoredImage(fileName: fileName, fill: false)
-                    .frame(maxHeight: 320)
-                    .cornerRadius(16)
-                Button("사진 변경") {
-                    showingPhotoImporter = true
-                }
-                .font(.caption)
-            }
-        } else {
-            Button {
-                showingPhotoImporter = true
-            } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 40))
-                    Text("탄생 사진 추가")
-                }
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 180)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                        .foregroundColor(.secondary.opacity(0.5))
+        VStack(spacing: 12) {
+            coverImageArea
+                .onDrop(
+                    of: [.image, .fileURL],
+                    isTargeted: $coverDropTargeted,
+                    perform: handleCoverDrop
                 )
+
+            HStack(spacing: 12) {
+                PhotosPicker(selection: $coverPickerItem, matching: .images) {
+                    Label("사진 보관함", systemImage: "photo.stack")
+                }
+                Button {
+                    showingPhotoImporter = true
+                } label: {
+                    Label("파일에서", systemImage: "folder")
+                }
+                Button(action: pasteCover) {
+                    Label("붙여넣기", systemImage: "doc.on.clipboard")
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .tint(Theme.accent)
         }
+        .onChange(of: coverPickerItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let attachment = store.addImage(image) {
+                    store.replaceCoverPhoto(with: attachment)
+                }
+                coverPickerItem = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var coverImageArea: some View {
+        if let fileName = store.data.story.coverPhotoFileName {
+            StoredImage(fileName: fileName, fill: false)
+                .frame(maxHeight: 320)
+                .cornerRadius(16)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "photo.badge.plus")
+                    .font(.system(size: 40))
+                Text("탄생 사진 추가")
+                Text("사진 앱에서 끌어다 놓거나 아래 버튼을 눌러 주세요")
+                    .font(.caption)
+            }
+            .foregroundColor(coverDropTargeted ? Theme.accent : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 180)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(coverDropTargeted ? Theme.accentSoft : Color.white.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                    .foregroundColor(coverDropTargeted ? Theme.accent : .secondary.opacity(0.5))
+            )
+        }
+    }
+
+    /// 클립보드의 이미지를 탄생 사진으로 넣는다.
+    private func pasteCover() {
+        guard let image = UIPasteboard.general.image,
+              let attachment = store.addImage(image) else { return }
+        store.replaceCoverPhoto(with: attachment)
+    }
+
+    /// 사진 앱·Finder에서 끌어온 이미지를 탄생 사진으로 넣는다.
+    private func handleCoverDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                guard let image = object as? UIImage else { return }
+                DispatchQueue.main.async {
+                    if let attachment = store.addImage(image) {
+                        store.replaceCoverPhoto(with: attachment)
+                    }
+                }
+            }
+            return true
+        }
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                var url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let direct = item as? URL {
+                    url = direct
+                }
+                guard let url else { return }
+                DispatchQueue.main.async {
+                    store.setCoverPhoto(from: url)
+                }
+            }
+            return true
+        }
+        return false
     }
 
     @ViewBuilder

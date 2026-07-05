@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import PhotosUI
 import UniformTypeIdentifiers
 
 /// 탄생 순간을 기억하는 고정 페이지. 탄생 정보 수정도 여기서 한다.
@@ -6,6 +8,8 @@ struct BirthStoryView: View {
     @EnvironmentObject private var store: Store
 
     @State private var showingPhotoImporter = false
+    @State private var coverPickerItem: PhotosPickerItem?
+    @State private var coverDropTargeted = false
     @State private var heightText = ""
     @State private var weightText = ""
     @State private var letter = ""
@@ -46,37 +50,109 @@ struct BirthStoryView: View {
         if let weight = store.data.story.birthWeightKg { weightText = String(weight) }
     }
 
-    @ViewBuilder
     private var coverSection: some View {
-        if let fileName = store.data.story.coverPhotoFileName {
-            VStack(spacing: 8) {
-                StoredImage(fileName: fileName, fill: false)
-                    .frame(maxHeight: 320)
-                    .cornerRadius(16)
-                Button("사진 변경") {
-                    showingPhotoImporter = true
-                }
-                .font(.caption)
-            }
-        } else {
-            Button {
-                showingPhotoImporter = true
-            } label: {
-                VStack(spacing: 8) {
-                    Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 40))
-                    Text("탄생 사진 추가")
-                }
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 180)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                        .foregroundColor(.secondary.opacity(0.5))
+        VStack(spacing: 12) {
+            coverImageArea
+                .onDrop(
+                    of: [.image, .fileURL],
+                    isTargeted: $coverDropTargeted,
+                    perform: handleCoverDrop
                 )
+
+            HStack(spacing: 12) {
+                PhotosPicker(selection: $coverPickerItem, matching: .images) {
+                    Label("사진 보관함", systemImage: "photo.stack")
+                }
+                Button {
+                    showingPhotoImporter = true
+                } label: {
+                    Label("파일에서", systemImage: "folder")
+                }
+                Button(action: pasteCover) {
+                    Label("붙여넣기", systemImage: "doc.on.clipboard")
+                }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .tint(Theme.accent)
         }
+        .onChange(of: coverPickerItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let attachment = store.addImage(image) {
+                    store.replaceCoverPhoto(with: attachment)
+                }
+                coverPickerItem = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var coverImageArea: some View {
+        if let fileName = store.data.story.coverPhotoFileName {
+            StoredImage(fileName: fileName, fill: false)
+                .frame(maxHeight: 320)
+                .cornerRadius(16)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "photo.badge.plus")
+                    .font(.system(size: 40))
+                Text("탄생 사진 추가")
+                Text("사진 앱에서 끌어다 놓거나 아래 버튼을 눌러 주세요")
+                    .font(.caption)
+            }
+            .foregroundColor(coverDropTargeted ? Theme.accent : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 180)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(coverDropTargeted ? Theme.accentSoft : Color.white.opacity(0.6))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                    .foregroundColor(coverDropTargeted ? Theme.accent : .secondary.opacity(0.5))
+            )
+        }
+    }
+
+    /// 클립보드의 이미지를 탄생 사진으로 넣는다.
+    private func pasteCover() {
+        guard let image = UIPasteboard.general.image,
+              let attachment = store.addImage(image) else { return }
+        store.replaceCoverPhoto(with: attachment)
+    }
+
+    /// 사진 앱·Finder에서 끌어온 이미지를 탄생 사진으로 넣는다.
+    private func handleCoverDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                guard let image = object as? UIImage else { return }
+                DispatchQueue.main.async {
+                    if let attachment = store.addImage(image) {
+                        store.replaceCoverPhoto(with: attachment)
+                    }
+                }
+            }
+            return true
+        }
+        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                var url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let direct = item as? URL {
+                    url = direct
+                }
+                guard let url else { return }
+                DispatchQueue.main.async {
+                    store.setCoverPhoto(from: url)
+                }
+            }
+            return true
+        }
+        return false
     }
 
     @ViewBuilder

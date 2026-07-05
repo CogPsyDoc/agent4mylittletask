@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import UIKit
+import PhotosUI
 import UniformTypeIdentifiers
 
 /// 하루 기록 편집기. 글은 입력 즉시 저장되고,
@@ -14,6 +15,7 @@ struct RecordEditorView: View {
     @State private var confirmingDelete = false
     @State private var viewingPhoto: MediaAttachment?
     @State private var dropTargeted = false
+    @State private var pickerItems: [PhotosPickerItem] = []
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -144,10 +146,16 @@ struct RecordEditorView: View {
 
     private var addButtons: some View {
         HStack(spacing: 12) {
+            PhotosPicker(
+                selection: $pickerItems,
+                matching: .any(of: [.images, .videos])
+            ) {
+                Label("사진 보관함", systemImage: "photo.stack")
+            }
             Button {
                 showingImporter = true
             } label: {
-                Label("파일에서 추가", systemImage: "photo.on.rectangle.angled")
+                Label("파일에서", systemImage: "folder")
             }
             Button(action: pasteFromClipboard) {
                 Label("붙여넣기", systemImage: "doc.on.clipboard")
@@ -155,6 +163,29 @@ struct RecordEditorView: View {
         }
         .buttonStyle(.bordered)
         .tint(Theme.accent)
+        .onChange(of: pickerItems) { items in
+            guard !items.isEmpty else { return }
+            Task {
+                var new: [MediaAttachment] = []
+                for item in items {
+                    let isVideo = item.supportedContentTypes.contains {
+                        $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent)
+                    }
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                    let ext = item.supportedContentTypes.first?.preferredFilenameExtension
+                        ?? (isVideo ? "mov" : "jpg")
+                    if let attachment = store.addMediaData(
+                        data,
+                        fileExtension: ext,
+                        type: isVideo ? .video : .photo
+                    ) {
+                        new.append(attachment)
+                    }
+                }
+                appendAttachments(new)
+                pickerItems = []
+            }
+        }
     }
 
     private var dropZone: some View {

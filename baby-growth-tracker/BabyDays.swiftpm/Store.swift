@@ -98,7 +98,13 @@ final class Store: ObservableObject {
                 try FileManager.default.copyItem(at: url, to: mediaFileURL(fileName))
                 result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
             } catch {
-                print("미디어 복사 실패: \(error)")
+                // 복사가 막히면 데이터로 읽어서 쓰는 경로를 한 번 더 시도한다
+                if let data = try? Data(contentsOf: url),
+                   (try? data.write(to: mediaFileURL(fileName))) != nil {
+                    result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
+                } else {
+                    print("미디어 복사 실패: \(error)")
+                }
             }
         }
         return result
@@ -117,11 +123,28 @@ final class Store: ObservableObject {
         }
     }
 
+    /// 사진 보관함 등에서 받은 원본 데이터를 확장자 그대로 저장한다.
+    func addMediaData(_ data: Data, fileExtension: String, type: MediaType) -> MediaAttachment? {
+        let fileName = UUID().uuidString + "." + fileExtension
+        do {
+            try data.write(to: mediaFileURL(fileName))
+            return MediaAttachment(id: UUID(), fileName: fileName, type: type)
+        } catch {
+            print("미디어 저장 실패: \(error)")
+            return nil
+        }
+    }
+
     func setCoverPhoto(from url: URL) {
+        replaceCoverPhoto(with: importAttachments(from: [url]).first)
+    }
+
+    func replaceCoverPhoto(with attachment: MediaAttachment?) {
+        guard let attachment else { return }
         if let old = data.story.coverPhotoFileName {
             try? FileManager.default.removeItem(at: mediaFileURL(old))
         }
-        data.story.coverPhotoFileName = importAttachments(from: [url]).first?.fileName
+        data.story.coverPhotoFileName = attachment.fileName
     }
 
     // MARK: - 성장 기록
