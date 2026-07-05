@@ -1797,9 +1797,9 @@ struct AlbumSyncView: View {
     // MARK: - 권한과 앨범 목록
 
     private func load() async {
-        status = PHPhotoLibrary.authorizationStatus(for: .readOnly)
+        status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if status == .notDetermined {
-            status = await PHPhotoLibrary.requestAuthorization(for: .readOnly)
+            status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         }
         guard status == .authorized || status == .limited else { return }
 
