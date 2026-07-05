@@ -28,6 +28,9 @@ let package = Package(
                 .portrait,
                 .landscapeRight,
                 .landscapeLeft
+            ],
+            capabilities: [
+                .photoLibrary(purposeString: "선택한 앨범의 사진을 날짜별 기록으로 가져오기 위해 사진 보관함에 접근합니다.")
             ]
         )
     ],

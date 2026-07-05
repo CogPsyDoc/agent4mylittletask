@@ -52,11 +52,18 @@ struct AppData: Codable {
     var growth: [GrowthEntry]
     var story: BirthStory
 
+    // 사진 앨범 동기화 상태
+    var syncedAlbumId: String?
+    var syncedAlbumName: String?
+    var syncedAssetIds: Set<String>
+    var lastSyncDate: Date?
+
     init() {
         profile = nil
         records = [:]
         growth = []
         story = BirthStory()
+        syncedAssetIds = []
     }
 
     // 이후 버전에서 필드가 추가되어도 기존 파일을 읽을 수 있도록 관대하게 디코딩한다.
@@ -66,6 +73,10 @@ struct AppData: Codable {
         records = try container.decodeIfPresent([String: DailyRecord].self, forKey: .records) ?? [:]
         growth = try container.decodeIfPresent([GrowthEntry].self, forKey: .growth) ?? []
         story = try container.decodeIfPresent(BirthStory.self, forKey: .story) ?? BirthStory()
+        syncedAlbumId = try container.decodeIfPresent(String.self, forKey: .syncedAlbumId)
+        syncedAlbumName = try container.decodeIfPresent(String.self, forKey: .syncedAlbumName)
+        syncedAssetIds = try container.decodeIfPresent(Set<String>.self, forKey: .syncedAssetIds) ?? []
+        lastSyncDate = try container.decodeIfPresent(Date.self, forKey: .lastSyncDate)
     }
 }
 

@@ -16,6 +16,8 @@ struct RecordEditorView: View {
     @State private var viewingPhoto: MediaAttachment?
     @State private var dropTargeted = false
     @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showingShareDialog = false
+    @State private var shareItems: [Any]?
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -65,26 +67,55 @@ struct RecordEditorView: View {
         .sheet(item: $viewingPhoto) { attachment in
             FullPhotoView(fileName: attachment.fileName)
         }
+        .confirmationDialog(
+            "이 날의 기록을 어떻게 공유할까요?",
+            isPresented: $showingShareDialog,
+            titleVisibility: .visible
+        ) {
+            Button("카드 이미지로 공유") { shareAsCard() }
+            Button("글·사진 원본 공유") { shareOriginals() }
+        }
+        .sheet(isPresented: Binding(
+            get: { shareItems != nil },
+            set: { if !$0 { shareItems = nil } }
+        )) {
+            ActivityView(items: shareItems ?? [])
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(Day.longString(date))
-                .font(.title2.bold())
-            HStack(spacing: 8) {
-                if let birth = store.data.profile?.birthDate {
-                    let days = Day.daysSinceBirth(birth: birth, on: date)
-                    if days >= 1 {
-                        Text("생후 \(days)일")
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Day.longString(date))
+                    .font(.title2.bold())
+                HStack(spacing: 8) {
+                    if let daysLabel {
+                        Text(daysLabel)
                             .foregroundColor(Theme.accent)
                     }
+                    if let milestone = store.milestoneName(on: date) {
+                        Text("🎉 \(milestone)")
+                    }
                 }
-                if let milestone = store.milestoneName(on: date) {
-                    Text("🎉 \(milestone)")
-                }
+                .font(.subheadline)
             }
-            .font(.subheadline)
+            Spacer()
+            if !record.isEmpty {
+                Button {
+                    showingShareDialog = true
+                } label: {
+                    Label("공유", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+            }
         }
+    }
+
+    private var daysLabel: String? {
+        guard let birth = store.data.profile?.birthDate else { return nil }
+        let days = Day.daysSinceBirth(birth: birth, on: date)
+        return days >= 1 ? "생후 \(days)일" : nil
     }
 
     private var textEditor: some View {
@@ -233,6 +264,59 @@ struct RecordEditorView: View {
         } else if let image = pasteboard.image, let attachment = store.addImage(image) {
             appendAttachments([attachment])
         }
+    }
+
+    // MARK: - 공유
+
+    /// 하루 기록을 한 장의 카드 이미지로 렌더링해 공유한다.
+    @MainActor
+    private func shareAsCard() {
+        let card = ShareCardView(
+            babyName: store.data.profile?.name ?? "",
+            daysText: daysLabel,
+            dateText: Day.longString(date),
+            bodyText: record.text,
+            images: loadedPhotoImages(limit: 4)
+        )
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 2
+        if let image = renderer.uiImage {
+            shareItems = [image]
+        }
+    }
+
+    /// 요약 글 + 사진 원본 + 영상 파일을 그대로 공유한다.
+    private func shareOriginals() {
+        var summary = store.data.profile?.name ?? ""
+        if let daysLabel {
+            summary += summary.isEmpty ? daysLabel : " · \(daysLabel)"
+        }
+        summary += " · \(Day.longString(date))"
+        if !record.text.isEmpty {
+            summary += "\n\n" + record.text
+        }
+
+        var items: [Any] = [summary]
+        for attachment in record.attachments {
+            let url = store.mediaFileURL(attachment.fileName)
+            if attachment.type == .photo, let image = UIImage(contentsOfFile: url.path) {
+                items.append(image)
+            } else {
+                items.append(url)
+            }
+        }
+        shareItems = items
+    }
+
+    private func loadedPhotoImages(limit: Int) -> [UIImage] {
+        record.attachments
+            .filter { $0.type == .photo }
+            .prefix(limit)
+            .compactMap { attachment in
+                let path = store.mediaFileURL(attachment.fileName).path
+                guard let image = UIImage(contentsOfFile: path) else { return nil }
+                return image.preparingThumbnail(of: CGSize(width: 900, height: 900)) ?? image
+            }
     }
 
     /// 사진 앱·Finder 등에서 드래그해 온 항목을 첨부한다.

@@ -5,6 +5,7 @@ struct CalendarView: View {
     @EnvironmentObject private var store: Store
     @State private var month = Day.firstOfMonth(Date())
     @State private var selectedKey = Day.key(for: Date())
+    @State private var showingAlbumSync = false
 
     private static let weekdaySymbols = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -17,6 +18,20 @@ struct CalendarView: View {
                     monthGrid
                 }
                 .card(cornerRadius: 20)
+
+                Button {
+                    showingAlbumSync = true
+                } label: {
+                    Label(
+                        store.data.syncedAlbumName.map { "'\($0)' 앨범 동기화" } ?? "사진 앨범 동기화",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+                .padding(.top, 12)
+
                 Spacer(minLength: 0)
             }
             .padding()
@@ -30,6 +45,9 @@ struct CalendarView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("달력")
+        .sheet(isPresented: $showingAlbumSync) {
+            AlbumSyncView()
+        }
     }
 
     private var monthHeader: some View {

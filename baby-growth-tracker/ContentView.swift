@@ -4,8 +4,13 @@
 // 이 파일 내용으로 ContentView.swift 전체를 교체하세요.
 // MyApp.swift(@main)는 템플릿 그대로 두면 됩니다 — ContentView()를 띄우기만 하면 돼요.
 //
+// ⚠️ 앨범 동기화 기능을 쓰려면 사진 보관함 권한이 필요합니다:
+//    앱 설정(프로젝트 이름 클릭) → 기능(Capabilities) → 사진 보관함(Photo Library) 추가
+//    + 사용 목적 문구 입력. 이 설정 없이 앨범 동기화를 열면 앱이 종료될 수 있어요.
+//
 // 기능: 생후 일수(태어난 날 = 1일) · 달력 기록(글/사진/영상) ·
-//       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기
+//       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기 ·
+//       사진 앨범 날짜별 동기화 · 하루 기록 공유(카드 이미지/원본)
 // 첨부: 사진 보관함 선택 + 파일 선택 + 드래그&드롭 + 클립보드 붙여넣기
 // 저장: 앱 샌드박스 Documents/store.json + Documents/Media/ (변경 즉시 자동 저장)
 
@@ -15,6 +20,7 @@ import Charts
 import AVKit
 import UIKit
 import PhotosUI
+import Photos
 import UniformTypeIdentifiers
 
 // MARK: - 진입점
@@ -182,11 +188,18 @@ struct AppData: Codable {
     var growth: [GrowthEntry]
     var story: BirthStory
 
+    // 사진 앨범 동기화 상태
+    var syncedAlbumId: String?
+    var syncedAlbumName: String?
+    var syncedAssetIds: Set<String>
+    var lastSyncDate: Date?
+
     init() {
         profile = nil
         records = [:]
         growth = []
         story = BirthStory()
+        syncedAssetIds = []
     }
 
     // 이후 버전에서 필드가 추가되어도 기존 파일을 읽을 수 있도록 관대하게 디코딩한다.
@@ -196,6 +209,10 @@ struct AppData: Codable {
         records = try container.decodeIfPresent([String: DailyRecord].self, forKey: .records) ?? [:]
         growth = try container.decodeIfPresent([GrowthEntry].self, forKey: .growth) ?? []
         story = try container.decodeIfPresent(BirthStory.self, forKey: .story) ?? BirthStory()
+        syncedAlbumId = try container.decodeIfPresent(String.self, forKey: .syncedAlbumId)
+        syncedAlbumName = try container.decodeIfPresent(String.self, forKey: .syncedAlbumName)
+        syncedAssetIds = try container.decodeIfPresent(Set<String>.self, forKey: .syncedAssetIds) ?? []
+        lastSyncDate = try container.decodeIfPresent(Date.self, forKey: .lastSyncDate)
     }
 }
 
@@ -731,6 +748,7 @@ struct CalendarView: View {
     @EnvironmentObject private var store: Store
     @State private var month = Day.firstOfMonth(Date())
     @State private var selectedKey = Day.key(for: Date())
+    @State private var showingAlbumSync = false
 
     private static let weekdaySymbols = ["일", "월", "화", "수", "목", "금", "토"]
 
@@ -743,6 +761,20 @@ struct CalendarView: View {
                     monthGrid
                 }
                 .card(cornerRadius: 20)
+
+                Button {
+                    showingAlbumSync = true
+                } label: {
+                    Label(
+                        store.data.syncedAlbumName.map { "'\($0)' 앨범 동기화" } ?? "사진 앨범 동기화",
+                        systemImage: "arrow.triangle.2.circlepath"
+                    )
+                    .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+                .padding(.top, 12)
+
                 Spacer(minLength: 0)
             }
             .padding()
@@ -756,6 +788,9 @@ struct CalendarView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("달력")
+        .sheet(isPresented: $showingAlbumSync) {
+            AlbumSyncView()
+        }
     }
 
     private var monthHeader: some View {
@@ -884,6 +919,8 @@ struct RecordEditorView: View {
     @State private var viewingPhoto: MediaAttachment?
     @State private var dropTargeted = false
     @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showingShareDialog = false
+    @State private var shareItems: [Any]?
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -933,26 +970,55 @@ struct RecordEditorView: View {
         .sheet(item: $viewingPhoto) { attachment in
             FullPhotoView(fileName: attachment.fileName)
         }
+        .confirmationDialog(
+            "이 날의 기록을 어떻게 공유할까요?",
+            isPresented: $showingShareDialog,
+            titleVisibility: .visible
+        ) {
+            Button("카드 이미지로 공유") { shareAsCard() }
+            Button("글·사진 원본 공유") { shareOriginals() }
+        }
+        .sheet(isPresented: Binding(
+            get: { shareItems != nil },
+            set: { if !$0 { shareItems = nil } }
+        )) {
+            ActivityView(items: shareItems ?? [])
+        }
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(Day.longString(date))
-                .font(.title2.bold())
-            HStack(spacing: 8) {
-                if let birth = store.data.profile?.birthDate {
-                    let days = Day.daysSinceBirth(birth: birth, on: date)
-                    if days >= 1 {
-                        Text("생후 \(days)일")
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Day.longString(date))
+                    .font(.title2.bold())
+                HStack(spacing: 8) {
+                    if let daysLabel {
+                        Text(daysLabel)
                             .foregroundColor(Theme.accent)
                     }
+                    if let milestone = store.milestoneName(on: date) {
+                        Text("🎉 \(milestone)")
+                    }
                 }
-                if let milestone = store.milestoneName(on: date) {
-                    Text("🎉 \(milestone)")
-                }
+                .font(.subheadline)
             }
-            .font(.subheadline)
+            Spacer()
+            if !record.isEmpty {
+                Button {
+                    showingShareDialog = true
+                } label: {
+                    Label("공유", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+            }
         }
+    }
+
+    private var daysLabel: String? {
+        guard let birth = store.data.profile?.birthDate else { return nil }
+        let days = Day.daysSinceBirth(birth: birth, on: date)
+        return days >= 1 ? "생후 \(days)일" : nil
     }
 
     private var textEditor: some View {
@@ -1101,6 +1167,59 @@ struct RecordEditorView: View {
         } else if let image = pasteboard.image, let attachment = store.addImage(image) {
             appendAttachments([attachment])
         }
+    }
+
+    // MARK: - 공유
+
+    /// 하루 기록을 한 장의 카드 이미지로 렌더링해 공유한다.
+    @MainActor
+    private func shareAsCard() {
+        let card = ShareCardView(
+            babyName: store.data.profile?.name ?? "",
+            daysText: daysLabel,
+            dateText: Day.longString(date),
+            bodyText: record.text,
+            images: loadedPhotoImages(limit: 4)
+        )
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 2
+        if let image = renderer.uiImage {
+            shareItems = [image]
+        }
+    }
+
+    /// 요약 글 + 사진 원본 + 영상 파일을 그대로 공유한다.
+    private func shareOriginals() {
+        var summary = store.data.profile?.name ?? ""
+        if let daysLabel {
+            summary += summary.isEmpty ? daysLabel : " · \(daysLabel)"
+        }
+        summary += " · \(Day.longString(date))"
+        if !record.text.isEmpty {
+            summary += "\n\n" + record.text
+        }
+
+        var items: [Any] = [summary]
+        for attachment in record.attachments {
+            let url = store.mediaFileURL(attachment.fileName)
+            if attachment.type == .photo, let image = UIImage(contentsOfFile: url.path) {
+                items.append(image)
+            } else {
+                items.append(url)
+            }
+        }
+        shareItems = items
+    }
+
+    private func loadedPhotoImages(limit: Int) -> [UIImage] {
+        record.attachments
+            .filter { $0.type == .photo }
+            .prefix(limit)
+            .compactMap { attachment in
+                let path = store.mediaFileURL(attachment.fileName).path
+                guard let image = UIImage(contentsOfFile: path) else { return nil }
+                return image.preparingThumbnail(of: CGSize(width: 900, height: 900)) ?? image
+            }
     }
 
     /// 사진 앱·Finder 등에서 드래그해 온 항목을 첨부한다.
@@ -1538,6 +1657,327 @@ struct BirthStoryView: View {
             get: { store.data.profile?.birthDate ?? Date() },
             set: { store.data.profile?.birthDate = $0 }
         )
+    }
+}
+
+
+struct AlbumInfo: Identifiable {
+    let id: String
+    let title: String
+    let count: Int
+}
+
+/// 사진 앱의 특정 앨범을 골라, 그 안의 사진·영상을 촬영 날짜에 맞는
+/// 달력 기록으로 가져오는 동기화 화면.
+struct AlbumSyncView: View {
+    @EnvironmentObject private var store: Store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var albums: [AlbumInfo] = []
+    @State private var status: PHAuthorizationStatus = .notDetermined
+    @State private var isSyncing = false
+    @State private var progressText = ""
+    @State private var resultText = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("사진 앨범 동기화")
+                    .font(.title3.bold())
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("선택한 앨범의 사진·영상을 촬영 날짜에 맞춰 달력 기록에 자동으로 넣어 줘요. 이미 가져온 항목은 다시 가져오지 않으니 새 사진이 생길 때마다 동기화하면 됩니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            switch status {
+            case .authorized, .limited:
+                albumList
+            case .denied, .restricted:
+                Text("사진 보관함 접근이 거부되어 있어요.\n시스템 설정 > 개인정보 보호 및 보안 > 사진에서 이 앱을 허용해 주세요.")
+                    .foregroundColor(.secondary)
+            default:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("사진 보관함 접근 권한을 확인하는 중…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .frame(minWidth: 440, minHeight: 500)
+        .background(Theme.background)
+        .task { await load() }
+    }
+
+    private var albumList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if albums.isEmpty {
+                Text("사용자 앨범이 없어요. 사진 앱에서 앨범을 만들고 아기 사진을 담아 주세요.")
+                    .foregroundColor(.secondary)
+            } else {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(albums) { album in
+                            Button {
+                                store.data.syncedAlbumId = album.id
+                                store.data.syncedAlbumName = album.title
+                                resultText = ""
+                            } label: {
+                                HStack {
+                                    Image(systemName: store.data.syncedAlbumId == album.id
+                                          ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(Theme.accent)
+                                    Text(album.title)
+                                    Spacer()
+                                    Text("\(album.count)개")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(store.data.syncedAlbumId == album.id
+                                              ? Theme.accentSoft : Color.white)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 260)
+            }
+
+            if let last = store.data.lastSyncDate {
+                Text("마지막 동기화: \(Day.longString(last)) \(Day.timeString(last))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if isSyncing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(progressText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else if !resultText.isEmpty {
+                Text(resultText)
+                    .font(.caption.bold())
+                    .foregroundColor(Theme.accent)
+            }
+
+            Button {
+                Task { await sync() }
+            } label: {
+                Label("지금 동기화", systemImage: "arrow.triangle.2.circlepath")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .disabled(store.data.syncedAlbumId == nil || isSyncing)
+        }
+    }
+
+    // MARK: - 권한과 앨범 목록
+
+    private func load() async {
+        status = PHPhotoLibrary.authorizationStatus(for: .readOnly)
+        if status == .notDetermined {
+            status = await PHPhotoLibrary.requestAuthorization(for: .readOnly)
+        }
+        guard status == .authorized || status == .limited else { return }
+
+        var found: [AlbumInfo] = []
+        let fetch = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: nil)
+        fetch.enumerateObjects { collection, _, _ in
+            let count = PHAsset.fetchAssets(in: collection, options: nil).count
+            found.append(AlbumInfo(
+                id: collection.localIdentifier,
+                title: collection.localizedTitle ?? "이름 없는 앨범",
+                count: count
+            ))
+        }
+        albums = found
+    }
+
+    // MARK: - 동기화
+
+    private func sync() async {
+        guard let albumId = store.data.syncedAlbumId else { return }
+        let collections = PHAssetCollection.fetchAssetCollections(
+            withLocalIdentifiers: [albumId], options: nil
+        )
+        guard let collection = collections.firstObject else {
+            resultText = "앨범을 찾을 수 없어요. 다시 선택해 주세요."
+            return
+        }
+
+        isSyncing = true
+        resultText = ""
+        defer { isSyncing = false }
+
+        var assets: [PHAsset] = []
+        PHAsset.fetchAssets(in: collection, options: nil).enumerateObjects { asset, _, _ in
+            assets.append(asset)
+        }
+        let fresh = assets.filter {
+            !store.data.syncedAssetIds.contains($0.localIdentifier) && $0.creationDate != nil
+        }
+
+        var imported = 0
+        for (index, asset) in fresh.enumerated() {
+            progressText = "가져오는 중… \(index + 1)/\(fresh.count)"
+            guard let creationDate = asset.creationDate else { continue }
+            do {
+                if let attachment = try await importAsset(asset) {
+                    var record = store.record(for: Day.key(for: creationDate))
+                    record.attachments.append(attachment)
+                    store.update(record)
+                    store.data.syncedAssetIds.insert(asset.localIdentifier)
+                    imported += 1
+                }
+            } catch {
+                print("앨범 항목 가져오기 실패: \(error)")
+            }
+        }
+
+        store.data.lastSyncDate = Date()
+        progressText = ""
+        resultText = imported == 0
+            ? "새로 가져올 항목이 없어요"
+            : "사진·영상 \(imported)개를 날짜별 기록에 넣었어요"
+    }
+
+    /// 원본 리소스를 Media 폴더로 내려받아 첨부를 만든다.
+    private func importAsset(_ asset: PHAsset) async throws -> MediaAttachment? {
+        let resources = PHAssetResource.assetResources(for: asset)
+        let isVideo = asset.mediaType == .video
+        let resource: PHAssetResource?
+        if isVideo {
+            resource = resources.first { $0.type == .fullSizeVideo }
+                ?? resources.first { $0.type == .video }
+                ?? resources.first
+        } else {
+            resource = resources.first { $0.type == .fullSizePhoto }
+                ?? resources.first { $0.type == .photo }
+                ?? resources.first
+        }
+        guard let resource else { return nil }
+
+        var ext = (resource.originalFilename as NSString).pathExtension.lowercased()
+        if ext.isEmpty { ext = isVideo ? "mov" : "jpg" }
+        let fileName = UUID().uuidString + "." + ext
+        let fileURL = store.mediaFileURL(fileName)
+
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true   // iCloud에만 있는 원본도 내려받기
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHAssetResourceManager.default().writeData(for: resource, toFile: fileURL, options: options) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+        return MediaAttachment(id: UUID(), fileName: fileName, type: isVideo ? .video : .photo)
+    }
+}
+
+
+/// 시스템 공유 시트 (AirDrop, 메시지, 메일, 저장 등).
+struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// 하루 기록을 한 장의 이미지로 만드는 카드. ImageRenderer로 렌더링한다.
+struct ShareCardView: View {
+    let babyName: String
+    let daysText: String?
+    let dateText: String
+    let bodyText: String
+    let images: [UIImage]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(babyName)
+                    .font(.title.bold())
+                if let daysText {
+                    Text(daysText)
+                        .font(.title3.bold())
+                        .foregroundColor(Theme.accent)
+                }
+                Spacer()
+                Text(dateText)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            if !images.isEmpty {
+                photoGrid
+            }
+
+            if !bodyText.isEmpty {
+                Text(bodyText)
+                    .font(.body)
+                    .lineSpacing(5)
+            }
+
+            HStack {
+                Spacer()
+                Text("우리 아기 하루하루 🐥")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(28)
+        .frame(width: 640)
+        .background(Theme.background)
+    }
+
+    private var photoGrid: some View {
+        let columns = images.count == 1 ? 1 : 2
+        let side: CGFloat = columns == 1 ? 584 : 286
+        let rows: [[UIImage]] = stride(from: 0, to: images.count, by: columns).map {
+            Array(images[$0..<min($0 + columns, images.count)])
+        }
+        return VStack(spacing: 12) {
+            ForEach(rows.indices, id: \.self) { rowIndex in
+                HStack(spacing: 12) {
+                    ForEach(rows[rowIndex].indices, id: \.self) { columnIndex in
+                        Image(uiImage: rows[rowIndex][columnIndex])
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: side, height: columns == 1 ? 420 : side)
+                            .clipped()
+                            .cornerRadius(14)
+                    }
+                }
+            }
+        }
     }
 }
 
