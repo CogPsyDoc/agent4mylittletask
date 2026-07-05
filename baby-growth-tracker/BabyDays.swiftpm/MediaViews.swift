@@ -118,17 +118,27 @@ struct VideoThumbnail: View {
     }
 }
 
-/// 뷰어 안에서 자동 재생되는 영상 뷰.
-struct AutoPlayVideoView: View {
+/// 뷰어 페이지 안의 영상. 화면에 보이는 페이지일 때만 재생한다
+/// (페이지 스와이프 시 옆 페이지가 미리 생성되어도 소리가 나지 않도록).
+struct ViewerVideoView: View {
     let url: URL
+    let isActive: Bool
     @State private var player: AVPlayer?
 
     var body: some View {
         VideoPlayer(player: player)
             .onAppear {
-                let newPlayer = AVPlayer(url: url)
-                player = newPlayer
-                newPlayer.play()
+                if player == nil {
+                    player = AVPlayer(url: url)
+                }
+                if isActive { player?.play() }
+            }
+            .onChange(of: isActive) { active in
+                if active {
+                    player?.play()
+                } else {
+                    player?.pause()
+                }
             }
             .onDisappear {
                 player?.pause()
@@ -158,26 +168,30 @@ struct MediaViewerView: View {
     @State private var hoveringPrev = false
     @State private var hoveringNext = false
 
-    private var current: MediaAttachment? {
-        attachments.indices.contains(index) ? attachments[index] : nil
-    }
-
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let current {
-                Group {
-                    if current.type == .photo {
-                        StoredImage(fileName: current.fileName, fill: false)
-                    } else {
-                        AutoPlayVideoView(url: store.mediaFileURL(current.fileName))
+            // 페이지 스와이프: 아이폰·아이패드는 손가락, 맥은 트랙패드 스와이프
+            TabView(selection: $index) {
+                ForEach(attachments.indices, id: \.self) { pageIndex in
+                    Group {
+                        if attachments[pageIndex].type == .photo {
+                            StoredImage(fileName: attachments[pageIndex].fileName, fill: false)
+                        } else {
+                            ViewerVideoView(
+                                url: store.mediaFileURL(attachments[pageIndex].fileName),
+                                isActive: index == pageIndex
+                            )
+                        }
                     }
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 50)
+                    .tag(pageIndex)
                 }
-                .id(current.id)
-                .padding(.horizontal, 60)
-                .padding(.vertical, 50)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .ignoresSafeArea()
 
             HStack {
                 navButton(
@@ -185,14 +199,14 @@ struct MediaViewerView: View {
                     key: .leftArrow,
                     disabled: index <= 0,
                     hovering: $hoveringPrev
-                ) { index -= 1 }
+                ) { withAnimation { index -= 1 } }
                 Spacer()
                 navButton(
                     systemName: "chevron.right",
                     key: .rightArrow,
                     disabled: index >= attachments.count - 1,
                     hovering: $hoveringNext
-                ) { index += 1 }
+                ) { withAnimation { index += 1 } }
             }
             .padding(.horizontal, 14)
 
