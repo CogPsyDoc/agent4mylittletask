@@ -26,6 +26,16 @@ Mac의 **Swift Playground** 앱에서 바로 열어 실행할 수 있는 `.swift
 > 정의되지만, Mac의 Swift Playground에서 그대로 창 앱으로 실행됩니다.
 > 그래서 UI 코드는 `NSImage` 대신 `UIImage`를 사용합니다.
 
+### 파일 하나로 붙여넣고 싶다면 (ContentView.swift 교체)
+
+폴더를 내려받는 대신 코드 복사·붙여넣기로 실행하려면 [`ContentView.swift`](ContentView.swift)를 쓰세요.
+
+1. Swift Playground에서 **앱** 템플릿으로 새 프로젝트를 만듭니다.
+2. 템플릿의 `ContentView.swift` 내용 전체를 이 저장소의 `ContentView.swift`로 교체합니다.
+3. `MyApp.swift`(@main)는 템플릿 그대로 두고 ▶ 실행하면 됩니다.
+
+두 방식은 같은 코드이며, `.swiftpm` 폴더 버전은 파일이 기능별로 나뉘어 있어 수정하기 편합니다.
+
 ## 데이터 저장 위치
 
 - 모든 기록은 앱 샌드박스 안의 `Documents/store.json`에, 첨부한 사진·영상은
