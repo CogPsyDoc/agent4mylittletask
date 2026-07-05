@@ -10,14 +10,17 @@
 //
 // 기능: 생후 일수(태어난 날 = 1일) · 달력 기록(글/사진/영상) ·
 //       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기 ·
-//       사진 앨범 날짜별 동기화 · 하루 기록 공유(카드 이미지/원본)
+//       사진 앨범 날짜별 동기화 · 하루 기록 공유(카드 이미지/원본) ·
+//       전체 화면 미디어 뷰어(←/→ 이동, Esc 닫기)
 // 첨부: 사진 보관함 선택 + 파일 선택 + 드래그&드롭 + 클립보드 붙여넣기
 // 저장: 앱 샌드박스 Documents/store.json + Documents/Media/ (변경 즉시 자동 저장)
 
 import SwiftUI
 import Foundation
+import Combine
 import Charts
 import AVKit
+import AVFoundation
 import UIKit
 import PhotosUI
 import Photos
@@ -624,6 +627,10 @@ struct HomeView: View {
     @EnvironmentObject private var store: Store
     @Binding var section: AppSection?
 
+    // 창을 며칠씩 켜 둬도 자정이 지나면 일수가 갱신되도록 1분마다 새로 그린다
+    @State private var now = Date()
+    private let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
     var body: some View {
         ScrollView {
             if let profile = store.data.profile {
@@ -640,6 +647,7 @@ struct HomeView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("홈")
+        .onReceive(minuteTimer) { now = $0 }
     }
 
     private func dayCounter(profile: BabyProfile) -> some View {
@@ -649,7 +657,7 @@ struct HomeView: View {
             Text("태어난 지")
                 .font(.title3)
                 .opacity(0.9)
-            Text("\(Day.daysSinceBirth(birth: profile.birthDate))일")
+            Text("\(Day.daysSinceBirth(birth: profile.birthDate, on: now))일")
                 .font(.system(size: 88, weight: .heavy, design: .rounded))
             Text("\(Day.ageText(birth: profile.birthDate)) · \(Day.longString(profile.birthDate)) 태어남")
                 .font(.subheadline)
@@ -916,7 +924,7 @@ struct RecordEditorView: View {
     @State private var text = ""
     @State private var showingImporter = false
     @State private var confirmingDelete = false
-    @State private var viewingPhoto: MediaAttachment?
+    @State private var viewer: MediaViewerContext?
     @State private var dropTargeted = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showingShareDialog = false
@@ -967,8 +975,8 @@ struct RecordEditorView: View {
                 text = ""
             }
         }
-        .sheet(item: $viewingPhoto) { attachment in
-            FullPhotoView(fileName: attachment.fileName)
+        .fullScreenCover(item: $viewer) { context in
+            MediaViewerView(attachments: context.attachments, startIndex: context.startIndex)
         }
         .confirmationDialog(
             "이 날의 기록을 어떻게 공유할까요?",
@@ -1053,28 +1061,34 @@ struct RecordEditorView: View {
 
     @ViewBuilder
     private var attachmentsSection: some View {
-        let photos = record.attachments.filter { $0.type == .photo }
-        let videos = record.attachments.filter { $0.type == .video }
-
-        if !photos.isEmpty {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-                ForEach(photos) { attachment in
-                    StoredImage(fileName: attachment.fileName, thumbnailSize: 240)
-                        .frame(width: 100, height: 100)
+        let attachments = record.attachments
+        if !attachments.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
+                    ForEach(attachments.indices, id: \.self) { index in
+                        let attachment = attachments[index]
+                        Group {
+                            if attachment.type == .photo {
+                                StoredImage(fileName: attachment.fileName, thumbnailSize: 240)
+                            } else {
+                                VideoThumbnail(fileName: attachment.fileName)
+                            }
+                        }
+                        .id(attachment.id)
+                        .frame(width: 110, height: 110)
                         .clipped()
                         .cornerRadius(10)
                         .contentShape(Rectangle())
-                        .onTapGesture { viewingPhoto = attachment }
+                        .onTapGesture {
+                            viewer = MediaViewerContext(attachments: attachments, startIndex: index)
+                        }
                         .contextMenu { deleteButton(attachment) }
+                    }
                 }
+                Text("클릭하면 크게 보고, 우클릭하면 삭제할 수 있어요")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
-        }
-
-        ForEach(videos) { attachment in
-            VideoAttachmentView(url: store.mediaFileURL(attachment.fileName))
-                .frame(height: 240)
-                .cornerRadius(10)
-                .contextMenu { deleteButton(attachment) }
         }
     }
 
@@ -1424,6 +1438,7 @@ struct BirthStoryView: View {
     @State private var showingPhotoImporter = false
     @State private var coverPickerItem: PhotosPickerItem?
     @State private var coverDropTargeted = false
+    @State private var showingCoverViewer = false
     @State private var heightText = ""
     @State private var weightText = ""
     @State private var letter = ""
@@ -1508,6 +1523,14 @@ struct BirthStoryView: View {
             StoredImage(fileName: fileName, fill: false)
                 .frame(maxHeight: 320)
                 .cornerRadius(16)
+                .contentShape(Rectangle())
+                .onTapGesture { showingCoverViewer = true }
+                .fullScreenCover(isPresented: $showingCoverViewer) {
+                    MediaViewerView(
+                        attachments: [MediaAttachment(id: UUID(), fileName: fileName, type: .photo)],
+                        startIndex: 0
+                    )
+                }
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "photo.badge.plus")
@@ -2032,46 +2055,197 @@ struct StoredImage: View {
     }
 }
 
-/// 사진을 크게 보는 시트.
-struct FullPhotoView: View {
-    @Environment(\.dismiss) private var dismiss
+/// 영상 첨부의 썸네일 (대표 프레임 + 재생 아이콘 + 길이).
+struct VideoThumbnail: View {
+    @EnvironmentObject private var store: Store
     let fileName: String
 
+    @State private var image: UIImage?
+    @State private var durationText: String?
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .padding()
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.black.opacity(0.75)
             }
-            StoredImage(fileName: fileName, fill: false)
-                .padding([.horizontal, .bottom])
+
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 30))
+                .foregroundColor(.white.opacity(0.9))
+                .shadow(radius: 3)
+
+            if let durationText {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(durationText)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color.black.opacity(0.55))
+                            )
+                            .padding(5)
+                    }
+                }
+            }
         }
-        .frame(minWidth: 400, minHeight: 400)
+        .task { await generate() }
+    }
+
+    private func generate() async {
+        guard image == nil else { return }
+        let asset = AVURLAsset(url: store.mediaFileURL(fileName))
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 480, height: 480)
+
+        if let result = try? await generator.image(at: CMTime(value: 1, timescale: 2)) {
+            image = UIImage(cgImage: result.image)
+        } else if let result = try? await generator.image(at: .zero) {
+            image = UIImage(cgImage: result.image)
+        }
+
+        if let duration = try? await asset.load(.duration), duration.seconds.isFinite {
+            let seconds = Int(duration.seconds.rounded())
+            durationText = String(format: "%d:%02d", seconds / 60, seconds % 60)
+        }
     }
 }
 
-/// 첨부된 영상을 인라인 재생하는 뷰.
-struct VideoAttachmentView: View {
+/// 뷰어 안에서 자동 재생되는 영상 뷰.
+struct AutoPlayVideoView: View {
     let url: URL
     @State private var player: AVPlayer?
 
     var body: some View {
         VideoPlayer(player: player)
             .onAppear {
-                if player == nil {
-                    player = AVPlayer(url: url)
-                }
+                let newPlayer = AVPlayer(url: url)
+                player = newPlayer
+                newPlayer.play()
             }
             .onDisappear {
                 player?.pause()
+                player = nil
             }
+    }
+}
+
+// MARK: - 전체 화면 미디어 뷰어
+
+/// 뷰어를 띄울 때 넘기는 정보 (그 날의 첨부 목록 + 시작 위치).
+struct MediaViewerContext: Identifiable {
+    let id = UUID()
+    let attachments: [MediaAttachment]
+    let startIndex: Int
+}
+
+/// 창 전체를 덮는 어두운 미디어 뷰어.
+/// 좌우 은은한 화살표(호버 시 진해짐)와 ←/→ 키로 이동, Esc나 X로 닫는다.
+struct MediaViewerView: View {
+    @EnvironmentObject private var store: Store
+    @Environment(\.dismiss) private var dismiss
+    let attachments: [MediaAttachment]
+    let startIndex: Int
+
+    @State private var index = 0
+    @State private var hoveringPrev = false
+    @State private var hoveringNext = false
+
+    private var current: MediaAttachment? {
+        attachments.indices.contains(index) ? attachments[index] : nil
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let current {
+                Group {
+                    if current.type == .photo {
+                        StoredImage(fileName: current.fileName, fill: false)
+                    } else {
+                        AutoPlayVideoView(url: store.mediaFileURL(current.fileName))
+                    }
+                }
+                .id(current.id)
+                .padding(.horizontal, 60)
+                .padding(.vertical, 50)
+            }
+
+            HStack {
+                navButton(
+                    systemName: "chevron.left",
+                    key: .leftArrow,
+                    disabled: index <= 0,
+                    hovering: $hoveringPrev
+                ) { index -= 1 }
+                Spacer()
+                navButton(
+                    systemName: "chevron.right",
+                    key: .rightArrow,
+                    disabled: index >= attachments.count - 1,
+                    hovering: $hoveringNext
+                ) { index += 1 }
+            }
+            .padding(.horizontal, 14)
+
+            VStack {
+                HStack {
+                    if attachments.count > 1 {
+                        Text("\(index + 1) / \(attachments.count)")
+                            .font(.callout.monospacedDigit())
+                            .foregroundColor(.white.opacity(0.75))
+                    }
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.body.bold())
+                            .foregroundColor(.white.opacity(0.85))
+                            .padding(10)
+                            .background(Circle().fill(Color.white.opacity(0.15)))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.cancelAction)   // Esc로 닫기
+                }
+                .padding(16)
+                Spacer()
+            }
+        }
+        .onAppear { index = startIndex }
+    }
+
+    private func navButton(
+        systemName: String,
+        key: KeyEquivalent,
+        disabled: Bool,
+        hovering: Binding<Bool>,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3.bold())
+                .foregroundColor(.white)
+                .padding(13)
+                .background(
+                    Circle().fill(Color.white.opacity(hovering.wrappedValue ? 0.32 : 0.10))
+                )
+        }
+        .buttonStyle(.plain)
+        .opacity(disabled ? 0 : (hovering.wrappedValue ? 1.0 : 0.5))
+        .disabled(disabled)
+        .onHover { hovering.wrappedValue = $0 }
+        .keyboardShortcut(key, modifiers: [])
+        .animation(.easeInOut(duration: 0.15), value: hovering.wrappedValue)
     }
 }

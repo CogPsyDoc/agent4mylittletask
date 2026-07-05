@@ -1,9 +1,14 @@
 import SwiftUI
+import Combine
 
 /// 생후 일수가 가장 크게 보이는 메인 화면.
 struct HomeView: View {
     @EnvironmentObject private var store: Store
     @Binding var section: AppSection?
+
+    // 창을 며칠씩 켜 둬도 자정이 지나면 일수가 갱신되도록 1분마다 새로 그린다
+    @State private var now = Date()
+    private let minuteTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -21,6 +26,7 @@ struct HomeView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle("홈")
+        .onReceive(minuteTimer) { now = $0 }
     }
 
     private func dayCounter(profile: BabyProfile) -> some View {
@@ -30,7 +36,7 @@ struct HomeView: View {
             Text("태어난 지")
                 .font(.title3)
                 .opacity(0.9)
-            Text("\(Day.daysSinceBirth(birth: profile.birthDate))일")
+            Text("\(Day.daysSinceBirth(birth: profile.birthDate, on: now))일")
                 .font(.system(size: 88, weight: .heavy, design: .rounded))
             Text("\(Day.ageText(birth: profile.birthDate)) · \(Day.longString(profile.birthDate)) 태어남")
                 .font(.subheadline)

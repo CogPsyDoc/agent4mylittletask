@@ -10,6 +10,7 @@ struct BirthStoryView: View {
     @State private var showingPhotoImporter = false
     @State private var coverPickerItem: PhotosPickerItem?
     @State private var coverDropTargeted = false
+    @State private var showingCoverViewer = false
     @State private var heightText = ""
     @State private var weightText = ""
     @State private var letter = ""
@@ -94,6 +95,14 @@ struct BirthStoryView: View {
             StoredImage(fileName: fileName, fill: false)
                 .frame(maxHeight: 320)
                 .cornerRadius(16)
+                .contentShape(Rectangle())
+                .onTapGesture { showingCoverViewer = true }
+                .fullScreenCover(isPresented: $showingCoverViewer) {
+                    MediaViewerView(
+                        attachments: [MediaAttachment(id: UUID(), fileName: fileName, type: .photo)],
+                        startIndex: 0
+                    )
+                }
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "photo.badge.plus")

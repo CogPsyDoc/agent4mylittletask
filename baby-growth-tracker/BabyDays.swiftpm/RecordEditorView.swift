@@ -13,7 +13,7 @@ struct RecordEditorView: View {
     @State private var text = ""
     @State private var showingImporter = false
     @State private var confirmingDelete = false
-    @State private var viewingPhoto: MediaAttachment?
+    @State private var viewer: MediaViewerContext?
     @State private var dropTargeted = false
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showingShareDialog = false
@@ -64,8 +64,8 @@ struct RecordEditorView: View {
                 text = ""
             }
         }
-        .sheet(item: $viewingPhoto) { attachment in
-            FullPhotoView(fileName: attachment.fileName)
+        .fullScreenCover(item: $viewer) { context in
+            MediaViewerView(attachments: context.attachments, startIndex: context.startIndex)
         }
         .confirmationDialog(
             "이 날의 기록을 어떻게 공유할까요?",
@@ -150,28 +150,34 @@ struct RecordEditorView: View {
 
     @ViewBuilder
     private var attachmentsSection: some View {
-        let photos = record.attachments.filter { $0.type == .photo }
-        let videos = record.attachments.filter { $0.type == .video }
-
-        if !photos.isEmpty {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
-                ForEach(photos) { attachment in
-                    StoredImage(fileName: attachment.fileName, thumbnailSize: 240)
-                        .frame(width: 100, height: 100)
+        let attachments = record.attachments
+        if !attachments.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
+                    ForEach(attachments.indices, id: \.self) { index in
+                        let attachment = attachments[index]
+                        Group {
+                            if attachment.type == .photo {
+                                StoredImage(fileName: attachment.fileName, thumbnailSize: 240)
+                            } else {
+                                VideoThumbnail(fileName: attachment.fileName)
+                            }
+                        }
+                        .id(attachment.id)
+                        .frame(width: 110, height: 110)
                         .clipped()
                         .cornerRadius(10)
                         .contentShape(Rectangle())
-                        .onTapGesture { viewingPhoto = attachment }
+                        .onTapGesture {
+                            viewer = MediaViewerContext(attachments: attachments, startIndex: index)
+                        }
                         .contextMenu { deleteButton(attachment) }
+                    }
                 }
+                Text("클릭하면 크게 보고, 우클릭하면 삭제할 수 있어요")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
-        }
-
-        ForEach(videos) { attachment in
-            VideoAttachmentView(url: store.mediaFileURL(attachment.fileName))
-                .frame(height: 240)
-                .cornerRadius(10)
-                .contextMenu { deleteButton(attachment) }
         }
     }
 
