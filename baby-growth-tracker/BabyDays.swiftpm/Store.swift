@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// 앱 데이터 저장소.
@@ -101,6 +102,19 @@ final class Store: ObservableObject {
             }
         }
         return result
+    }
+
+    /// 드래그&드롭이나 클립보드 붙여넣기로 들어온 이미지를 JPEG으로 저장한다.
+    func addImage(_ image: UIImage) -> MediaAttachment? {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
+        let fileName = UUID().uuidString + ".jpg"
+        do {
+            try data.write(to: mediaFileURL(fileName))
+            return MediaAttachment(id: UUID(), fileName: fileName, type: .photo)
+        } catch {
+            print("이미지 저장 실패: \(error)")
+            return nil
+        }
     }
 
     func setCoverPhoto(from url: URL) {

@@ -6,6 +6,7 @@
 //
 // 기능: 생후 일수(태어난 날 = 1일) · 달력 기록(글/사진/영상) ·
 //       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기
+// 첨부: 파일 선택 + 사진 앱/Finder에서 드래그&드롭 + 클립보드 붙여넣기
 // 저장: 앱 샌드박스 Documents/store.json + Documents/Media/ (변경 즉시 자동 저장)
 
 import SwiftUI
@@ -28,6 +29,9 @@ struct ContentView: View {
                 MainView()
             }
         }
+        .environment(\.locale, .koreanWith24Hour)  // 년월일 표기 + 24시간제
+        .preferredColorScheme(.light)              // 항상 밝은 테마
+        .tint(Theme.accent)
         .environmentObject(store)
     }
 }
@@ -74,6 +78,54 @@ struct MainView: View {
             }
         }
     }
+}
+
+
+/// 앱 전체에서 쓰는 따뜻한 파스텔 톤 팔레트.
+enum Theme {
+    static let background = Color(red: 1.0, green: 0.973, blue: 0.945)   // 따뜻한 크림
+    static let card = Color.white
+    static let accent = Color(red: 0.96, green: 0.42, blue: 0.52)        // 코랄 핑크
+    static let accentSoft = Color(red: 1.0, green: 0.90, blue: 0.90)
+    static let peach = Color(red: 1.0, green: 0.93, blue: 0.85)
+    static let mint = Color(red: 0.86, green: 0.96, blue: 0.90)
+    static let lavender = Color(red: 0.93, green: 0.91, blue: 0.98)
+    static let sky = Color(red: 0.88, green: 0.94, blue: 0.99)
+
+    /// 홈 카운터 카드에 쓰는 코랄 → 살구 그라데이션.
+    static let gradient = LinearGradient(
+        colors: [
+            Color(red: 0.98, green: 0.45, blue: 0.55),
+            Color(red: 1.0, green: 0.63, blue: 0.45)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let milestonePastels: [Color] = [accentSoft, mint, lavender, peach, sky]
+}
+
+extension View {
+    /// 크림색 배경 위에 얹는 흰색 라운드 카드.
+    func card(_ color: Color = Theme.card, cornerRadius: CGFloat = 16) -> some View {
+        self
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: cornerRadius).fill(color))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(Color.black.opacity(0.05))
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
+    }
+}
+
+extension Locale {
+    /// 한국어 년월일 표기 + 24시간제. DatePicker 등 시스템 컨트롤에 적용한다.
+    static let koreanWith24Hour: Locale = {
+        var components = Locale.Components(identifier: "ko_KR")
+        components.hourCycle = .zeroToTwentyThree
+        return Locale(components: components)
+    }()
 }
 
 
@@ -261,7 +313,7 @@ enum Day {
 
     private static let longFormatter = formatter("yyyy년 M월 d일 (E)")
     private static let monthFormatter = formatter("yyyy년 M월")
-    private static let timeFormatter = formatter("a h시 m분")
+    private static let timeFormatter = formatter("H시 m분")
 
     static func longString(_ date: Date) -> String { longFormatter.string(from: date) }
     static func monthTitle(_ date: Date) -> String { monthFormatter.string(from: date) }
@@ -374,6 +426,19 @@ final class Store: ObservableObject {
         return result
     }
 
+    /// 드래그&드롭이나 클립보드 붙여넣기로 들어온 이미지를 JPEG으로 저장한다.
+    func addImage(_ image: UIImage) -> MediaAttachment? {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
+        let fileName = UUID().uuidString + ".jpg"
+        do {
+            try data.write(to: mediaFileURL(fileName))
+            return MediaAttachment(id: UUID(), fileName: fileName, type: .photo)
+        } catch {
+            print("이미지 저장 실패: \(error)")
+            return nil
+        }
+    }
+
     func setCoverPhoto(from url: URL) {
         if let old = data.story.coverPhotoFileName {
             try? FileManager.default.removeItem(at: mediaFileURL(old))
@@ -424,9 +489,14 @@ struct OnboardingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text("👶")
-                        .font(.system(size: 64))
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accentSoft)
+                            .frame(width: 96, height: 96)
+                        Text("🐥")
+                            .font(.system(size: 48))
+                    }
                     Text("우리 아기 하루하루")
                         .font(.largeTitle.bold())
                     Text("아이의 정보를 입력하면 기록을 시작할 수 있어요")
@@ -469,16 +539,17 @@ struct OnboardingView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .frame(maxWidth: 420)
+                .card(cornerRadius: 20)
+                .frame(maxWidth: 440)
 
                 Button(action: start) {
                     Text("시작하기")
                         .font(.headline)
-                        .frame(maxWidth: 420)
+                        .frame(maxWidth: 408)
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.pink)
+                .tint(Theme.accent)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 Spacer(minLength: 40)
@@ -486,6 +557,7 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity)
             .padding()
         }
+        .background(Theme.background.ignoresSafeArea())
     }
 
     private func start() {
@@ -514,7 +586,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             if let profile = store.data.profile {
-                VStack(spacing: 32) {
+                VStack(spacing: 24) {
                     dayCounter(profile: profile)
                     milestonesSection
                     todaySection
@@ -525,6 +597,7 @@ struct HomeView: View {
                 .padding()
             }
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("홈")
     }
 
@@ -534,15 +607,19 @@ struct HomeView: View {
                 .font(.title2.bold())
             Text("태어난 지")
                 .font(.title3)
-                .foregroundColor(.secondary)
+                .opacity(0.9)
             Text("\(Day.daysSinceBirth(birth: profile.birthDate))일")
                 .font(.system(size: 88, weight: .heavy, design: .rounded))
-                .foregroundColor(.pink)
             Text("\(Day.ageText(birth: profile.birthDate)) · \(Day.longString(profile.birthDate)) 태어남")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .opacity(0.9)
         }
-        .padding(.top, 32)
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Theme.gradient))
+        .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 5)
+        .padding(.top, 16)
     }
 
     @ViewBuilder
@@ -553,7 +630,8 @@ struct HomeView: View {
                 Text("다가오는 기념일")
                     .font(.headline)
                 HStack(spacing: 12) {
-                    ForEach(upcoming) { milestone in
+                    ForEach(upcoming.indices, id: \.self) { index in
+                        let milestone = upcoming[index]
                         VStack(spacing: 6) {
                             Text(milestone.name)
                                 .font(.headline)
@@ -562,13 +640,13 @@ struct HomeView: View {
                                 .foregroundColor(.secondary)
                             Text(Day.ddayText(to: milestone.date))
                                 .font(.title3.bold())
-                                .foregroundColor(.pink)
+                                .foregroundColor(Theme.accent)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.pink.opacity(0.08))
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.milestonePastels[index % Theme.milestonePastels.count])
                         )
                     }
                 }
@@ -598,24 +676,22 @@ struct HomeView: View {
                         section = .calendar
                     }
                     .font(.subheadline)
+                    .foregroundColor(Theme.accent)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.gray.opacity(0.08))
-                )
+                .card()
             } else {
                 Button {
                     section = .calendar
                 } label: {
                     Label("오늘을 기록해 보세요", systemImage: "square.and.pencil")
                         .font(.headline)
+                        .foregroundColor(Theme.accent)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 18)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.pink.opacity(0.12))
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.accentSoft)
                         )
                 }
                 .buttonStyle(.plain)
@@ -636,10 +712,13 @@ struct CalendarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 12) {
-                monthHeader
-                weekdayHeader
-                monthGrid
+            VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    monthHeader
+                    weekdayHeader
+                    monthGrid
+                }
+                .card(cornerRadius: 20)
                 Spacer(minLength: 0)
             }
             .padding()
@@ -651,6 +730,7 @@ struct CalendarView: View {
                 .id(selectedKey)
                 .frame(maxWidth: .infinity)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("달력")
     }
 
@@ -685,8 +765,10 @@ struct CalendarView: View {
         HStack {
             ForEach(Self.weekdaySymbols, id: \.self) { symbol in
                 Text(symbol)
-                    .font(.caption)
-                    .foregroundColor(symbol == "일" ? .red : .secondary)
+                    .font(.caption.bold())
+                    .foregroundColor(
+                        symbol == "일" ? .red : symbol == "토" ? .blue : .secondary
+                    )
                     .frame(maxWidth: .infinity)
             }
         }
@@ -726,18 +808,25 @@ private struct DayCell: View {
         let hasRecord = store.data.records[key] != nil
         let milestone = store.milestoneName(on: date)
         let isToday = key == Day.key(for: Date())
+        let weekday = Day.calendar.component(.weekday, from: date)
 
         Button(action: onTap) {
             VStack(spacing: 3) {
                 Text("\(Day.calendar.component(.day, from: date))")
-                    .font(.callout.weight(isToday ? .bold : .regular))
+                    .font(.callout.weight(isToday || isSelected ? .bold : .regular))
+                    .foregroundColor(
+                        isSelected ? .white
+                        : weekday == 1 ? .red
+                        : weekday == 7 ? .blue
+                        : .primary
+                    )
                 HStack(spacing: 3) {
                     if milestone != nil {
                         Text("🎉").font(.system(size: 9))
                     }
                     if hasRecord {
                         Circle()
-                            .fill(Color.pink)
+                            .fill(isSelected ? Color.white : Theme.accent)
                             .frame(width: 5, height: 5)
                     }
                 }
@@ -745,12 +834,12 @@ private struct DayCell: View {
             }
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.pink.opacity(0.18) : Color.clear)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Theme.accent : Color.clear)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isToday ? Color.pink : Color.clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isToday && !isSelected ? Theme.accent : Color.clear, lineWidth: 1.5)
             )
             .contentShape(Rectangle())
         }
@@ -759,7 +848,8 @@ private struct DayCell: View {
 }
 
 
-/// 하루 기록 편집기. 글은 입력 즉시 저장되고, 사진·영상은 파일에서 골라 첨부한다.
+/// 하루 기록 편집기. 글은 입력 즉시 저장되고,
+/// 사진·영상은 파일 선택 / 드래그&드롭 / 클립보드 붙여넣기로 첨부한다.
 struct RecordEditorView: View {
     @EnvironmentObject private var store: Store
     let dayKey: String
@@ -768,6 +858,7 @@ struct RecordEditorView: View {
     @State private var showingImporter = false
     @State private var confirmingDelete = false
     @State private var viewingPhoto: MediaAttachment?
+    @State private var dropTargeted = false
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -778,12 +869,8 @@ struct RecordEditorView: View {
                 header
                 textEditor
                 attachmentsSection
-
-                Button {
-                    showingImporter = true
-                } label: {
-                    Label("사진·영상 추가", systemImage: "photo.on.rectangle.angled")
-                }
+                addButtons
+                dropZone
 
                 if !record.isEmpty {
                     Button(role: .destructive) {
@@ -796,6 +883,8 @@ struct RecordEditorView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Theme.background)
+        .onDrop(of: [.image, .movie, .fileURL], isTargeted: $dropTargeted, perform: handleDrop)
         .onAppear { text = record.text }
         .fileImporter(
             isPresented: $showingImporter,
@@ -803,10 +892,7 @@ struct RecordEditorView: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                let imported = store.importAttachments(from: urls)
-                var updated = record
-                updated.attachments.append(contentsOf: imported)
-                store.update(updated)
+                appendAttachments(store.importAttachments(from: urls))
             }
         }
         .confirmationDialog(
@@ -833,7 +919,7 @@ struct RecordEditorView: View {
                     let days = Day.daysSinceBirth(birth: birth, on: date)
                     if days >= 1 {
                         Text("생후 \(days)일")
-                            .foregroundColor(.pink)
+                            .foregroundColor(Theme.accent)
                     }
                 }
                 if let milestone = store.milestoneName(on: date) {
@@ -849,9 +935,14 @@ struct RecordEditorView: View {
             .font(.body)
             .frame(minHeight: 180)
             .padding(8)
+            .scrollContentBackground(.hidden)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.gray.opacity(0.08))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.black.opacity(0.07))
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -896,12 +987,117 @@ struct RecordEditorView: View {
         }
     }
 
+    private var addButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                showingImporter = true
+            } label: {
+                Label("파일에서 추가", systemImage: "photo.on.rectangle.angled")
+            }
+            Button(action: pasteFromClipboard) {
+                Label("붙여넣기", systemImage: "doc.on.clipboard")
+            }
+        }
+        .buttonStyle(.bordered)
+        .tint(Theme.accent)
+    }
+
+    private var dropZone: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "square.and.arrow.down.on.square")
+                .font(.title3)
+            Text("사진 앱이나 Finder에서 사진·영상을 여기로 끌어다 놓아도 돼요")
+                .font(.caption)
+        }
+        .foregroundColor(dropTargeted ? Theme.accent : .secondary)
+        .frame(maxWidth: .infinity, minHeight: 84)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(dropTargeted ? Theme.accentSoft : Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                .foregroundColor(dropTargeted ? Theme.accent : Color.secondary.opacity(0.35))
+        )
+    }
+
     private func deleteButton(_ attachment: MediaAttachment) -> some View {
         Button(role: .destructive) {
             store.deleteAttachment(attachment, from: dayKey)
         } label: {
             Label("삭제", systemImage: "trash")
         }
+    }
+
+    // MARK: - 첨부 추가 경로들
+
+    private func appendAttachments(_ new: [MediaAttachment]) {
+        guard !new.isEmpty else { return }
+        var updated = record
+        updated.attachments.append(contentsOf: new)
+        store.update(updated)
+    }
+
+    /// 클립보드의 이미지를 첨부한다 (스크린샷, 복사한 그림 등).
+    private func pasteFromClipboard() {
+        let pasteboard = UIPasteboard.general
+        if let images = pasteboard.images, !images.isEmpty {
+            appendAttachments(images.compactMap { store.addImage($0) })
+        } else if let image = pasteboard.image, let attachment = store.addImage(image) {
+            appendAttachments([attachment])
+        }
+    }
+
+    /// 사진 앱·Finder 등에서 드래그해 온 항목을 첨부한다.
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                handled = true
+                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
+                    guard let url else { return }
+                    // 원본 임시 파일은 이 핸들러가 끝나면 사라지므로 여기서 바로 복사해 둔다
+                    let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+                    let copied = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString + "." + ext)
+                    do {
+                        try FileManager.default.copyItem(at: url, to: copied)
+                    } catch {
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        appendAttachments(store.importAttachments(from: [copied]))
+                        try? FileManager.default.removeItem(at: copied)
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: UIImage.self) {
+                handled = true
+                provider.loadObject(ofClass: UIImage.self) { object, _ in
+                    guard let image = object as? UIImage else { return }
+                    DispatchQueue.main.async {
+                        if let attachment = store.addImage(image) {
+                            appendAttachments([attachment])
+                        }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                handled = true
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    var url: URL?
+                    if let data = item as? Data {
+                        url = URL(dataRepresentation: data, relativeTo: nil)
+                    } else if let direct = item as? URL {
+                        url = direct
+                    }
+                    guard let url else { return }
+                    DispatchQueue.main.async {
+                        appendAttachments(store.importAttachments(from: [url]))
+                    }
+                }
+            }
+        }
+        return handled
     }
 }
 
@@ -944,6 +1140,7 @@ struct GrowthView: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("성장")
     }
 
@@ -957,16 +1154,12 @@ struct GrowthView: View {
                 TextField("몸무게 (kg)", text: $weightText)
                 Button("추가", action: add)
                     .buttonStyle(.borderedProminent)
-                    .tint(.pink)
+                    .tint(Theme.accent)
                     .disabled(parseDouble(heightText) == nil && parseDouble(weightText) == nil)
             }
             .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.08))
-        )
+        .card()
     }
 
     private func add() {
@@ -1005,11 +1198,7 @@ struct GrowthView: View {
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: 220)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.06))
-            )
+            .card()
         }
     }
 
@@ -1078,6 +1267,7 @@ struct BirthStoryView: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("탄생 이야기")
         .onAppear(perform: loadOnce)
         .fileImporter(
@@ -1164,11 +1354,7 @@ struct BirthStoryView: View {
             TextField("태어난 곳", text: binding(\.birthPlace))
                 .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.06))
-        )
+        .card()
     }
 
     private var measurementsCard: some View {
@@ -1187,11 +1373,7 @@ struct BirthStoryView: View {
             }
             .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.06))
-        )
+        .card()
     }
 
     private var letterCard: some View {
@@ -1202,9 +1384,10 @@ struct BirthStoryView: View {
                 .font(.body)
                 .frame(minHeight: 200)
                 .padding(8)
+                .scrollContentBackground(.hidden)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.pink.opacity(0.05))
+                        .fill(Theme.accentSoft.opacity(0.5))
                 )
                 .onChange(of: letter) { newValue in
                     store.data.story.letter = newValue

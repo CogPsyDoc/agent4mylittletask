@@ -8,7 +8,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             if let profile = store.data.profile {
-                VStack(spacing: 32) {
+                VStack(spacing: 24) {
                     dayCounter(profile: profile)
                     milestonesSection
                     todaySection
@@ -19,6 +19,7 @@ struct HomeView: View {
                 .padding()
             }
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("홈")
     }
 
@@ -28,15 +29,19 @@ struct HomeView: View {
                 .font(.title2.bold())
             Text("태어난 지")
                 .font(.title3)
-                .foregroundColor(.secondary)
+                .opacity(0.9)
             Text("\(Day.daysSinceBirth(birth: profile.birthDate))일")
                 .font(.system(size: 88, weight: .heavy, design: .rounded))
-                .foregroundColor(.pink)
             Text("\(Day.ageText(birth: profile.birthDate)) · \(Day.longString(profile.birthDate)) 태어남")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .opacity(0.9)
         }
-        .padding(.top, 32)
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .background(RoundedRectangle(cornerRadius: 24).fill(Theme.gradient))
+        .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 5)
+        .padding(.top, 16)
     }
 
     @ViewBuilder
@@ -47,7 +52,8 @@ struct HomeView: View {
                 Text("다가오는 기념일")
                     .font(.headline)
                 HStack(spacing: 12) {
-                    ForEach(upcoming) { milestone in
+                    ForEach(upcoming.indices, id: \.self) { index in
+                        let milestone = upcoming[index]
                         VStack(spacing: 6) {
                             Text(milestone.name)
                                 .font(.headline)
@@ -56,13 +62,13 @@ struct HomeView: View {
                                 .foregroundColor(.secondary)
                             Text(Day.ddayText(to: milestone.date))
                                 .font(.title3.bold())
-                                .foregroundColor(.pink)
+                                .foregroundColor(Theme.accent)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.pink.opacity(0.08))
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.milestonePastels[index % Theme.milestonePastels.count])
                         )
                     }
                 }
@@ -92,24 +98,22 @@ struct HomeView: View {
                         section = .calendar
                     }
                     .font(.subheadline)
+                    .foregroundColor(Theme.accent)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.gray.opacity(0.08))
-                )
+                .card()
             } else {
                 Button {
                     section = .calendar
                 } label: {
                     Label("오늘을 기록해 보세요", systemImage: "square.and.pencil")
                         .font(.headline)
+                        .foregroundColor(Theme.accent)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 18)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color.pink.opacity(0.12))
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Theme.accentSoft)
                         )
                 }
                 .buttonStyle(.plain)

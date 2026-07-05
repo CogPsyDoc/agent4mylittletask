@@ -13,9 +13,14 @@ struct OnboardingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                VStack(spacing: 8) {
-                    Text("👶")
-                        .font(.system(size: 64))
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accentSoft)
+                            .frame(width: 96, height: 96)
+                        Text("🐥")
+                            .font(.system(size: 48))
+                    }
                     Text("우리 아기 하루하루")
                         .font(.largeTitle.bold())
                     Text("아이의 정보를 입력하면 기록을 시작할 수 있어요")
@@ -58,16 +63,17 @@ struct OnboardingView: View {
                             .foregroundColor(.secondary)
                     }
                 }
-                .frame(maxWidth: 420)
+                .card(cornerRadius: 20)
+                .frame(maxWidth: 440)
 
                 Button(action: start) {
                     Text("시작하기")
                         .font(.headline)
-                        .frame(maxWidth: 420)
+                        .frame(maxWidth: 408)
                         .padding(.vertical, 10)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.pink)
+                .tint(Theme.accent)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
 
                 Spacer(minLength: 40)
@@ -75,6 +81,7 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity)
             .padding()
         }
+        .background(Theme.background.ignoresSafeArea())
     }
 
     private func start() {

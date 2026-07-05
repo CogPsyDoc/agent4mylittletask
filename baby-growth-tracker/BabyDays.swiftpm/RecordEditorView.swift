@@ -1,8 +1,10 @@
 import SwiftUI
 import AVKit
+import UIKit
 import UniformTypeIdentifiers
 
-/// 하루 기록 편집기. 글은 입력 즉시 저장되고, 사진·영상은 파일에서 골라 첨부한다.
+/// 하루 기록 편집기. 글은 입력 즉시 저장되고,
+/// 사진·영상은 파일 선택 / 드래그&드롭 / 클립보드 붙여넣기로 첨부한다.
 struct RecordEditorView: View {
     @EnvironmentObject private var store: Store
     let dayKey: String
@@ -11,6 +13,7 @@ struct RecordEditorView: View {
     @State private var showingImporter = false
     @State private var confirmingDelete = false
     @State private var viewingPhoto: MediaAttachment?
+    @State private var dropTargeted = false
 
     private var record: DailyRecord { store.record(for: dayKey) }
     private var date: Date { Day.date(from: dayKey) }
@@ -21,12 +24,8 @@ struct RecordEditorView: View {
                 header
                 textEditor
                 attachmentsSection
-
-                Button {
-                    showingImporter = true
-                } label: {
-                    Label("사진·영상 추가", systemImage: "photo.on.rectangle.angled")
-                }
+                addButtons
+                dropZone
 
                 if !record.isEmpty {
                     Button(role: .destructive) {
@@ -39,6 +38,8 @@ struct RecordEditorView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Theme.background)
+        .onDrop(of: [.image, .movie, .fileURL], isTargeted: $dropTargeted, perform: handleDrop)
         .onAppear { text = record.text }
         .fileImporter(
             isPresented: $showingImporter,
@@ -46,10 +47,7 @@ struct RecordEditorView: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                let imported = store.importAttachments(from: urls)
-                var updated = record
-                updated.attachments.append(contentsOf: imported)
-                store.update(updated)
+                appendAttachments(store.importAttachments(from: urls))
             }
         }
         .confirmationDialog(
@@ -76,7 +74,7 @@ struct RecordEditorView: View {
                     let days = Day.daysSinceBirth(birth: birth, on: date)
                     if days >= 1 {
                         Text("생후 \(days)일")
-                            .foregroundColor(.pink)
+                            .foregroundColor(Theme.accent)
                     }
                 }
                 if let milestone = store.milestoneName(on: date) {
@@ -92,9 +90,14 @@ struct RecordEditorView: View {
             .font(.body)
             .frame(minHeight: 180)
             .padding(8)
+            .scrollContentBackground(.hidden)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.gray.opacity(0.08))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.black.opacity(0.07))
             )
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
@@ -139,11 +142,116 @@ struct RecordEditorView: View {
         }
     }
 
+    private var addButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                showingImporter = true
+            } label: {
+                Label("파일에서 추가", systemImage: "photo.on.rectangle.angled")
+            }
+            Button(action: pasteFromClipboard) {
+                Label("붙여넣기", systemImage: "doc.on.clipboard")
+            }
+        }
+        .buttonStyle(.bordered)
+        .tint(Theme.accent)
+    }
+
+    private var dropZone: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "square.and.arrow.down.on.square")
+                .font(.title3)
+            Text("사진 앱이나 Finder에서 사진·영상을 여기로 끌어다 놓아도 돼요")
+                .font(.caption)
+        }
+        .foregroundColor(dropTargeted ? Theme.accent : .secondary)
+        .frame(maxWidth: .infinity, minHeight: 84)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(dropTargeted ? Theme.accentSoft : Color.white)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                .foregroundColor(dropTargeted ? Theme.accent : Color.secondary.opacity(0.35))
+        )
+    }
+
     private func deleteButton(_ attachment: MediaAttachment) -> some View {
         Button(role: .destructive) {
             store.deleteAttachment(attachment, from: dayKey)
         } label: {
             Label("삭제", systemImage: "trash")
         }
+    }
+
+    // MARK: - 첨부 추가 경로들
+
+    private func appendAttachments(_ new: [MediaAttachment]) {
+        guard !new.isEmpty else { return }
+        var updated = record
+        updated.attachments.append(contentsOf: new)
+        store.update(updated)
+    }
+
+    /// 클립보드의 이미지를 첨부한다 (스크린샷, 복사한 그림 등).
+    private func pasteFromClipboard() {
+        let pasteboard = UIPasteboard.general
+        if let images = pasteboard.images, !images.isEmpty {
+            appendAttachments(images.compactMap { store.addImage($0) })
+        } else if let image = pasteboard.image, let attachment = store.addImage(image) {
+            appendAttachments([attachment])
+        }
+    }
+
+    /// 사진 앱·Finder 등에서 드래그해 온 항목을 첨부한다.
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var handled = false
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                handled = true
+                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
+                    guard let url else { return }
+                    // 원본 임시 파일은 이 핸들러가 끝나면 사라지므로 여기서 바로 복사해 둔다
+                    let ext = url.pathExtension.isEmpty ? "mov" : url.pathExtension
+                    let copied = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString + "." + ext)
+                    do {
+                        try FileManager.default.copyItem(at: url, to: copied)
+                    } catch {
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        appendAttachments(store.importAttachments(from: [copied]))
+                        try? FileManager.default.removeItem(at: copied)
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: UIImage.self) {
+                handled = true
+                provider.loadObject(ofClass: UIImage.self) { object, _ in
+                    guard let image = object as? UIImage else { return }
+                    DispatchQueue.main.async {
+                        if let attachment = store.addImage(image) {
+                            appendAttachments([attachment])
+                        }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                handled = true
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    var url: URL?
+                    if let data = item as? Data {
+                        url = URL(dataRepresentation: data, relativeTo: nil)
+                    } else if let direct = item as? URL {
+                        url = direct
+                    }
+                    guard let url else { return }
+                    DispatchQueue.main.async {
+                        appendAttachments(store.importAttachments(from: [url]))
+                    }
+                }
+            }
+        }
+        return handled
     }
 }

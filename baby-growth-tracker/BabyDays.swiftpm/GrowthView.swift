@@ -39,6 +39,7 @@ struct GrowthView: View {
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("성장")
     }
 
@@ -52,16 +53,12 @@ struct GrowthView: View {
                 TextField("몸무게 (kg)", text: $weightText)
                 Button("추가", action: add)
                     .buttonStyle(.borderedProminent)
-                    .tint(.pink)
+                    .tint(Theme.accent)
                     .disabled(parseDouble(heightText) == nil && parseDouble(weightText) == nil)
             }
             .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.08))
-        )
+        .card()
     }
 
     private func add() {
@@ -100,11 +97,7 @@ struct GrowthView: View {
                 .chartYScale(domain: .automatic(includesZero: false))
                 .frame(height: 220)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.06))
-            )
+            .card()
         }
     }
 

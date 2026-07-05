@@ -184,7 +184,7 @@ enum Day {
 
     private static let longFormatter = formatter("yyyy년 M월 d일 (E)")
     private static let monthFormatter = formatter("yyyy년 M월")
-    private static let timeFormatter = formatter("a h시 m분")
+    private static let timeFormatter = formatter("H시 m분")
 
     static func longString(_ date: Date) -> String { longFormatter.string(from: date) }
     static func monthTitle(_ date: Date) -> String { monthFormatter.string(from: date) }

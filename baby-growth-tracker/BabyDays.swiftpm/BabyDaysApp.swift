@@ -16,11 +16,16 @@ struct RootView: View {
     @EnvironmentObject private var store: Store
 
     var body: some View {
-        if store.data.profile == nil {
-            OnboardingView()
-        } else {
-            MainView()
+        Group {
+            if store.data.profile == nil {
+                OnboardingView()
+            } else {
+                MainView()
+            }
         }
+        .environment(\.locale, .koreanWith24Hour)  // 년월일 표기 + 24시간제
+        .preferredColorScheme(.light)              // 항상 밝은 테마
+        .tint(Theme.accent)
     }
 }
 

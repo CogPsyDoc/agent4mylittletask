@@ -24,6 +24,7 @@ struct BirthStoryView: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("탄생 이야기")
         .onAppear(perform: loadOnce)
         .fileImporter(
@@ -110,11 +111,7 @@ struct BirthStoryView: View {
             TextField("태어난 곳", text: binding(\.birthPlace))
                 .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.06))
-        )
+        .card()
     }
 
     private var measurementsCard: some View {
@@ -133,11 +130,7 @@ struct BirthStoryView: View {
             }
             .textFieldStyle(.roundedBorder)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.06))
-        )
+        .card()
     }
 
     private var letterCard: some View {
@@ -148,9 +141,10 @@ struct BirthStoryView: View {
                 .font(.body)
                 .frame(minHeight: 200)
                 .padding(8)
+                .scrollContentBackground(.hidden)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.pink.opacity(0.05))
+                        .fill(Theme.accentSoft.opacity(0.5))
                 )
                 .onChange(of: letter) { newValue in
                     store.data.story.letter = newValue

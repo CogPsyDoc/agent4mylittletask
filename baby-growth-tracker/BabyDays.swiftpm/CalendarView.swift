@@ -10,10 +10,13 @@ struct CalendarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 12) {
-                monthHeader
-                weekdayHeader
-                monthGrid
+            VStack(spacing: 0) {
+                VStack(spacing: 12) {
+                    monthHeader
+                    weekdayHeader
+                    monthGrid
+                }
+                .card(cornerRadius: 20)
                 Spacer(minLength: 0)
             }
             .padding()
@@ -25,6 +28,7 @@ struct CalendarView: View {
                 .id(selectedKey)
                 .frame(maxWidth: .infinity)
         }
+        .background(Theme.background.ignoresSafeArea())
         .navigationTitle("달력")
     }
 
@@ -59,8 +63,10 @@ struct CalendarView: View {
         HStack {
             ForEach(Self.weekdaySymbols, id: \.self) { symbol in
                 Text(symbol)
-                    .font(.caption)
-                    .foregroundColor(symbol == "일" ? .red : .secondary)
+                    .font(.caption.bold())
+                    .foregroundColor(
+                        symbol == "일" ? .red : symbol == "토" ? .blue : .secondary
+                    )
                     .frame(maxWidth: .infinity)
             }
         }
@@ -100,18 +106,25 @@ private struct DayCell: View {
         let hasRecord = store.data.records[key] != nil
         let milestone = store.milestoneName(on: date)
         let isToday = key == Day.key(for: Date())
+        let weekday = Day.calendar.component(.weekday, from: date)
 
         Button(action: onTap) {
             VStack(spacing: 3) {
                 Text("\(Day.calendar.component(.day, from: date))")
-                    .font(.callout.weight(isToday ? .bold : .regular))
+                    .font(.callout.weight(isToday || isSelected ? .bold : .regular))
+                    .foregroundColor(
+                        isSelected ? .white
+                        : weekday == 1 ? .red
+                        : weekday == 7 ? .blue
+                        : .primary
+                    )
                 HStack(spacing: 3) {
                     if milestone != nil {
                         Text("🎉").font(.system(size: 9))
                     }
                     if hasRecord {
                         Circle()
-                            .fill(Color.pink)
+                            .fill(isSelected ? Color.white : Theme.accent)
                             .frame(width: 5, height: 5)
                     }
                 }
@@ -119,12 +132,12 @@ private struct DayCell: View {
             }
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.pink.opacity(0.18) : Color.clear)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Theme.accent : Color.clear)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isToday ? Color.pink : Color.clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isToday && !isSelected ? Theme.accent : Color.clear, lineWidth: 1.5)
             )
             .contentShape(Rectangle())
         }
