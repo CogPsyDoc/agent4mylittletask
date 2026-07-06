@@ -38,7 +38,7 @@ struct BirthStoryView: View {
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result, let url = urls.first {
-                store.setCoverPhoto(from: url)
+                Task { await store.setCoverPhoto(from: url) }
             }
         }
     }
@@ -155,8 +155,8 @@ struct BirthStoryView: View {
                     url = direct
                 }
                 guard let url else { return }
-                DispatchQueue.main.async {
-                    store.setCoverPhoto(from: url)
+                Task { @MainActor in
+                    await store.setCoverPhoto(from: url)
                 }
             }
             return true

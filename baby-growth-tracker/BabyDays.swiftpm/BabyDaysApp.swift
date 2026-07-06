@@ -14,6 +14,7 @@ struct BabyDaysApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var store: Store
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -26,6 +27,12 @@ struct RootView: View {
         .environment(\.locale, .koreanWith24Hour)  // 년월일 표기 + 24시간제
         .preferredColorScheme(.light)              // 항상 밝은 테마
         .tint(Theme.accent)
+        .onChange(of: scenePhase) { phase in
+            // 창을 닫거나 앱이 백그라운드로 가면 미뤄 둔 저장을 바로 반영한다
+            if phase != .active {
+                store.saveNow()
+            }
+        }
     }
 }
 
@@ -34,6 +41,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case calendar = "달력"
     case growth = "성장"
     case story = "탄생 이야기"
+    case backup = "백업"
 
     var id: AppSection { self }
 
@@ -43,6 +51,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .calendar: return "calendar"
         case .growth: return "chart.line.uptrend.xyaxis"
         case .story: return "heart.fill"
+        case .backup: return "externaldrive.fill"
         }
     }
 }
@@ -68,6 +77,8 @@ struct MainView: View {
                 GrowthView()
             case .story:
                 BirthStoryView()
+            case .backup:
+                BackupView()
             }
         }
     }

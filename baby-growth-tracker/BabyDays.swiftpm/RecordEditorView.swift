@@ -51,7 +51,9 @@ struct RecordEditorView: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                appendAttachments(store.importAttachments(from: urls))
+                Task {
+                    appendAttachments(await store.importAttachments(from: urls))
+                }
             }
         }
         .confirmationDialog(
@@ -208,15 +210,17 @@ struct RecordEditorView: View {
                     let isVideo = item.supportedContentTypes.contains {
                         $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent)
                     }
-                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                    let ext = item.supportedContentTypes.first?.preferredFilenameExtension
-                        ?? (isVideo ? "mov" : "jpg")
-                    if let attachment = store.addMediaData(
-                        data,
-                        fileExtension: ext,
-                        type: isVideo ? .video : .photo
-                    ) {
-                        new.append(attachment)
+                    if isVideo {
+                        // 영상은 메모리에 통째로 올리지 않고 임시 파일로 받는다
+                        guard let video = try? await item.loadTransferable(type: PickedVideo.self) else { continue }
+                        new.append(contentsOf: await store.importAttachments(from: [video.url]))
+                        try? FileManager.default.removeItem(at: video.url)
+                    } else {
+                        guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                        let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+                        if let attachment = store.addMediaData(data, fileExtension: ext, type: .photo) {
+                            new.append(attachment)
+                        }
                     }
                 }
                 appendAttachments(new)
@@ -342,8 +346,8 @@ struct RecordEditorView: View {
                     } catch {
                         return
                     }
-                    DispatchQueue.main.async {
-                        appendAttachments(store.importAttachments(from: [copied]))
+                    Task { @MainActor in
+                        appendAttachments(await store.importAttachments(from: [copied]))
                         try? FileManager.default.removeItem(at: copied)
                     }
                 }
@@ -367,8 +371,8 @@ struct RecordEditorView: View {
                         url = direct
                     }
                     guard let url else { return }
-                    DispatchQueue.main.async {
-                        appendAttachments(store.importAttachments(from: [url]))
+                    Task { @MainActor in
+                        appendAttachments(await store.importAttachments(from: [url]))
                     }
                 }
             }

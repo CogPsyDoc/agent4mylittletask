@@ -16,6 +16,7 @@ struct AlbumSyncView: View {
     @State private var albums: [AlbumInfo] = []
     @State private var status: PHAuthorizationStatus = .notDetermined
     @State private var isSyncing = false
+    @State private var syncTask: Task<Void, Never>?
     @State private var progressText = ""
     @State private var resultText = ""
 
@@ -122,15 +123,22 @@ struct AlbumSyncView: View {
             }
 
             Button {
-                Task { await sync() }
+                if isSyncing {
+                    syncTask?.cancel()
+                } else {
+                    syncTask = Task { await sync() }
+                }
             } label: {
-                Label("지금 동기화", systemImage: "arrow.triangle.2.circlepath")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                Label(
+                    isSyncing ? "동기화 중단" : "지금 동기화",
+                    systemImage: isSyncing ? "stop.circle" : "arrow.triangle.2.circlepath"
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .disabled(store.data.syncedAlbumId == nil || isSyncing)
+            .tint(isSyncing ? .gray : Theme.accent)
+            .disabled(store.data.syncedAlbumId == nil)
         }
     }
 
@@ -170,7 +178,10 @@ struct AlbumSyncView: View {
 
         isSyncing = true
         resultText = ""
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            syncTask = nil
+        }
 
         var assets: [PHAsset] = []
         PHAsset.fetchAssets(in: collection, options: nil).enumerateObjects { asset, _, _ in
@@ -181,7 +192,13 @@ struct AlbumSyncView: View {
         }
 
         var imported = 0
+        var failed = 0
+        var cancelled = false
         for (index, asset) in fresh.enumerated() {
+            if Task.isCancelled {
+                cancelled = true
+                break
+            }
             progressText = "가져오는 중… \(index + 1)/\(fresh.count)"
             guard let creationDate = asset.creationDate else { continue }
             do {
@@ -191,17 +208,31 @@ struct AlbumSyncView: View {
                     store.update(record)
                     store.data.syncedAssetIds.insert(asset.localIdentifier)
                     imported += 1
+                    // 도중에 앱이 꺼져도 같은 항목을 중복으로 가져오지 않도록 중간 저장
+                    if imported % 20 == 0 {
+                        await store.flush()
+                    }
                 }
             } catch {
+                failed += 1
                 print("앨범 항목 가져오기 실패: \(error)")
             }
         }
 
-        store.data.lastSyncDate = Date()
+        if !cancelled {
+            store.data.lastSyncDate = Date()
+        }
+        await store.flush()
         progressText = ""
-        resultText = imported == 0
-            ? "새로 가져올 항목이 없어요"
-            : "사진·영상 \(imported)개를 날짜별 기록에 넣었어요"
+        if cancelled {
+            resultText = "중단했어요. 지금까지 가져온 \(imported)개는 저장돼 있어요"
+        } else if imported == 0 && failed == 0 {
+            resultText = "새로 가져올 항목이 없어요"
+        } else if failed > 0 {
+            resultText = "\(imported)개 가져옴 · \(failed)개 실패 (다음 동기화 때 다시 시도돼요)"
+        } else {
+            resultText = "사진·영상 \(imported)개를 날짜별 기록에 넣었어요"
+        }
     }
 
     /// 원본 리소스를 Media 폴더로 내려받아 첨부를 만든다.
@@ -227,14 +258,20 @@ struct AlbumSyncView: View {
 
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true   // iCloud에만 있는 원본도 내려받기
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            PHAssetResourceManager.default().writeData(for: resource, toFile: fileURL, options: options) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                PHAssetResourceManager.default().writeData(for: resource, toFile: fileURL, options: options) { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
                 }
             }
+        } catch {
+            // 내려받다 만 파일이 남지 않도록 정리
+            try? FileManager.default.removeItem(at: fileURL)
+            throw error
         }
         return MediaAttachment(id: UUID(), fileName: fileName, type: isVideo ? .video : .photo)
     }

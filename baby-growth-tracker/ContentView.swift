@@ -10,10 +10,9 @@
 //
 // 기능: 생후 일수(태어난 날 = 1일) · 달력 기록(글/사진/영상) ·
 //       기념일 D-day(50일/백일/200일/300일/돌) · 성장 그래프 · 탄생 이야기 ·
-//       사진 앨범 날짜별 동기화 · 하루 기록 공유(카드 이미지/원본) ·
+//       사진 앨범 날짜별 동기화 · 하루 기록 공유 · 백업/복원 ·
 //       전체 화면 미디어 뷰어(스와이프 / ←→ 키 / Esc 닫기)
-// 첨부: 사진 보관함 선택 + 파일 선택 + 드래그&드롭 + 클립보드 붙여넣기
-// 저장: 앱 샌드박스 Documents/store.json + Documents/Media/ (변경 즉시 자동 저장)
+// 저장: 0.8초 묶음 백그라운드 저장 + 손상 자동 복구(store.previous.json)
 
 import SwiftUI
 import Foundation
@@ -24,12 +23,14 @@ import AVFoundation
 import UIKit
 import PhotosUI
 import Photos
+import CoreTransferable
 import UniformTypeIdentifiers
 
 // MARK: - 진입점
 
 struct ContentView: View {
     @StateObject private var store = Store()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -43,6 +44,12 @@ struct ContentView: View {
         .preferredColorScheme(.light)              // 항상 밝은 테마
         .tint(Theme.accent)
         .environmentObject(store)
+        .onChange(of: scenePhase) { phase in
+            // 창을 닫거나 앱이 백그라운드로 가면 미뤄 둔 저장을 바로 반영한다
+            if phase != .active {
+                store.saveNow()
+            }
+        }
     }
 }
 
@@ -51,6 +58,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case calendar = "달력"
     case growth = "성장"
     case story = "탄생 이야기"
+    case backup = "백업"
 
     var id: AppSection { self }
 
@@ -60,6 +68,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .calendar: return "calendar"
         case .growth: return "chart.line.uptrend.xyaxis"
         case .story: return "heart.fill"
+        case .backup: return "externaldrive.fill"
         }
     }
 }
@@ -85,6 +94,8 @@ struct MainView: View {
                 GrowthView()
             case .story:
                 BirthStoryView()
+            case .backup:
+                BackupView()
             }
         }
     }
@@ -346,44 +357,128 @@ func parseDouble(_ text: String) -> Double? {
 }
 
 
+/// 인코딩과 파일 쓰기를 백그라운드에서 순서대로 처리하는 작성기.
+/// generation이 낮은(더 오래된) 스냅숏은 건너뛰어 항상 최신 데이터만 디스크에 남긴다.
+private actor StoreWriter {
+    private var lastGeneration = 0
+
+    func write(_ snapshot: AppData, generation: Int, to url: URL) {
+        guard generation > lastGeneration else { return }
+        lastGeneration = generation
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.sortedKeys]
+            let raw = try encoder.encode(snapshot)
+            try raw.write(to: url, options: .atomic)
+        } catch {
+            print("저장 실패: \(error)")
+        }
+    }
+}
+
 /// 앱 데이터 저장소.
-/// - 데이터: Documents/store.json (변경 시마다 즉시 저장)
+/// - 데이터: Documents/store.json — 연속 변경을 0.8초 단위로 묶어 백그라운드에서 저장
+/// - 복구: 실행 시 정상 데이터를 store.previous.json으로 남겨, 본 파일 손상 시 자동 복구
 /// - 미디어: Documents/Media/ 폴더에 원본을 복사해 보관
 @MainActor
 final class Store: ObservableObject {
     @Published var data: AppData {
-        didSet { save() }
+        didSet { scheduleSave() }
     }
 
     private let storeURL: URL
+    private let previousURL: URL
     private let mediaDirectoryURL: URL
+    private let writer = StoreWriter()
+    private var saveTask: Task<Void, Never>?
+    private var saveGeneration = 0
+    private var pendingSince: Date?
+
+    var documentsURL: URL { storeURL.deletingLastPathComponent() }
 
     init() {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         storeURL = documents.appendingPathComponent("store.json")
+        previousURL = documents.appendingPathComponent("store.previous.json")
         mediaDirectoryURL = documents.appendingPathComponent("Media", isDirectory: true)
         try? FileManager.default.createDirectory(at: mediaDirectoryURL, withIntermediateDirectories: true)
 
+        data = Store.loadData(storeURL: storeURL, previousURL: previousURL)
+
+        // 이번 실행에서 정상적으로 읽은 파일을 복구용 사본으로 남긴다
+        if FileManager.default.fileExists(atPath: storeURL.path) {
+            try? FileManager.default.removeItem(at: previousURL)
+            try? FileManager.default.copyItem(at: storeURL, to: previousURL)
+        }
+    }
+
+    private static func loadData(storeURL: URL, previousURL: URL) -> AppData {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         if let raw = try? Data(contentsOf: storeURL),
            let decoded = try? decoder.decode(AppData.self, from: raw) {
-            data = decoded
-        } else {
-            data = AppData()
+            return decoded
+        }
+        // 본 파일을 읽지 못하면: 손상 파일을 지우지 말고 옆으로 치워 둔 뒤 직전 사본으로 복구한다
+        if FileManager.default.fileExists(atPath: storeURL.path) {
+            let corrupt = storeURL.deletingLastPathComponent()
+                .appendingPathComponent("store.corrupt.json")
+            try? FileManager.default.removeItem(at: corrupt)
+            try? FileManager.default.moveItem(at: storeURL, to: corrupt)
+        }
+        if let raw = try? Data(contentsOf: previousURL),
+           let decoded = try? decoder.decode(AppData.self, from: raw) {
+            return decoded
+        }
+        return AppData()
+    }
+
+    // MARK: - 저장
+
+    /// 연속 변경(타이핑, 동기화 등)을 0.8초 단위로 묶고, 5초 넘게 미뤄지면 즉시 저장한다.
+    private func scheduleSave() {
+        if pendingSince == nil { pendingSince = Date() }
+        saveTask?.cancel()
+        if let since = pendingSince, Date().timeIntervalSince(since) > 5 {
+            performSave()
+            return
+        }
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+            self?.performSave()
         }
     }
 
-    private func save() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let raw = try encoder.encode(data)
-            try raw.write(to: storeURL, options: .atomic)
-        } catch {
-            print("저장 실패: \(error)")
-        }
+    private func performSave() {
+        pendingSince = nil
+        saveGeneration += 1
+        let generation = saveGeneration
+        let snapshot = data
+        let url = storeURL
+        Task { await writer.write(snapshot, generation: generation, to: url) }
+    }
+
+    /// 대기 없이 곧바로 저장을 시작한다 (앱이 백그라운드로 갈 때, 온보딩 완료 등).
+    func saveNow() {
+        saveTask?.cancel()
+        performSave()
+    }
+
+    /// 저장이 디스크에 반영될 때까지 기다린다 (백업 직전, 동기화 중간·마무리용).
+    func flush() async {
+        saveTask?.cancel()
+        pendingSince = nil
+        saveGeneration += 1
+        let generation = saveGeneration
+        await writer.write(data, generation: generation, to: storeURL)
+    }
+
+    /// 디스크의 내용으로 메모리 데이터를 교체한다 (백업 복원 후).
+    func reloadFromDisk() {
+        saveTask?.cancel()
+        data = Store.loadData(storeURL: storeURL, previousURL: previousURL)
     }
 
     func mediaFileURL(_ fileName: String) -> URL {
@@ -418,8 +513,16 @@ final class Store: ObservableObject {
 
     // MARK: - 미디어 가져오기
 
-    /// fileImporter로 고른 파일들을 앱의 Media 폴더로 복사한다.
-    func importAttachments(from urls: [URL]) -> [MediaAttachment] {
+    /// 고른 파일들을 앱의 Media 폴더로 복사한다.
+    /// 복사는 백그라운드에서 실행해 몇 GB짜리 영상도 UI를 멈추지 않는다.
+    func importAttachments(from urls: [URL]) async -> [MediaAttachment] {
+        let directory = mediaDirectoryURL
+        return await Task.detached(priority: .userInitiated) {
+            Store.copyMediaFiles(urls, into: directory)
+        }.value
+    }
+
+    nonisolated private static func copyMediaFiles(_ urls: [URL], into directory: URL) -> [MediaAttachment] {
         var result: [MediaAttachment] = []
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
@@ -437,13 +540,14 @@ final class Store: ObservableObject {
 
             let ext = url.pathExtension.isEmpty ? "dat" : url.pathExtension
             let fileName = UUID().uuidString + "." + ext
+            let destination = directory.appendingPathComponent(fileName)
             do {
-                try FileManager.default.copyItem(at: url, to: mediaFileURL(fileName))
+                try FileManager.default.copyItem(at: url, to: destination)
                 result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
             } catch {
                 // 복사가 막히면 데이터로 읽어서 쓰는 경로를 한 번 더 시도한다
                 if let data = try? Data(contentsOf: url),
-                   (try? data.write(to: mediaFileURL(fileName))) != nil {
+                   (try? data.write(to: destination)) != nil {
                     result.append(MediaAttachment(id: UUID(), fileName: fileName, type: type))
                 } else {
                     print("미디어 복사 실패: \(error)")
@@ -478,8 +582,8 @@ final class Store: ObservableObject {
         }
     }
 
-    func setCoverPhoto(from url: URL) {
-        replaceCoverPhoto(with: importAttachments(from: [url]).first)
+    func setCoverPhoto(from url: URL) async {
+        replaceCoverPhoto(with: await importAttachments(from: [url]).first)
     }
 
     func replaceCoverPhoto(with attachment: MediaAttachment?) {
@@ -516,6 +620,62 @@ final class Store: ObservableObject {
     func milestoneName(on date: Date) -> String? {
         let key = Day.key(for: date)
         return milestones().first { Day.key(for: $0.date) == key }?.name
+    }
+
+    // MARK: - 백업·복원
+
+    /// 선택한 폴더 안에 날짜가 붙은 백업 폴더를 만들고 전체 데이터를 복사한다.
+    nonisolated static func performBackup(from documents: URL, to destination: URL) throws -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HHmmss"
+        let name = "BabyDays 백업 " + formatter.string(from: Date())
+        let target = destination.appendingPathComponent(name, isDirectory: true)
+        let fm = FileManager.default
+
+        try fm.createDirectory(at: target, withIntermediateDirectories: true)
+        try fm.copyItem(
+            at: documents.appendingPathComponent("store.json"),
+            to: target.appendingPathComponent("store.json")
+        )
+        let media = documents.appendingPathComponent("Media", isDirectory: true)
+        if fm.fileExists(atPath: media.path) {
+            try fm.copyItem(at: media, to: target.appendingPathComponent("Media", isDirectory: true))
+        }
+        return name
+    }
+
+    /// 백업 폴더의 내용으로 현재 데이터를 교체한다. 복사 전에 백업 파일이 유효한지 검증한다.
+    nonisolated static func performRestore(from backup: URL, into documents: URL) throws {
+        let fm = FileManager.default
+        let backupStore = backup.appendingPathComponent("store.json")
+        let raw = try Data(contentsOf: backupStore)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        _ = try decoder.decode(AppData.self, from: raw)   // 유효한 백업인지 먼저 확인
+
+        try raw.write(to: documents.appendingPathComponent("store.json"), options: .atomic)
+
+        let liveMedia = documents.appendingPathComponent("Media", isDirectory: true)
+        let backupMedia = backup.appendingPathComponent("Media", isDirectory: true)
+        try? fm.removeItem(at: liveMedia)
+        if fm.fileExists(atPath: backupMedia.path) {
+            try fm.copyItem(at: backupMedia, to: liveMedia)
+        } else {
+            try fm.createDirectory(at: liveMedia, withIntermediateDirectories: true)
+        }
+    }
+
+    nonisolated static func folderSize(at url: URL) -> Int64 {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey]) else {
+            return 0
+        }
+        var total: Int64 = 0
+        for file in files {
+            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            total += Int64(size)
+        }
+        return total
     }
 }
 
@@ -618,6 +778,7 @@ struct OnboardingView: View {
         if height != nil || weight != nil {
             store.addGrowth(GrowthEntry(id: UUID(), date: birthDate, heightCm: height, weightKg: weight))
         }
+        store.saveNow()   // 첫 등록 정보는 바로 디스크에 남긴다
     }
 }
 
@@ -962,7 +1123,9 @@ struct RecordEditorView: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                appendAttachments(store.importAttachments(from: urls))
+                Task {
+                    appendAttachments(await store.importAttachments(from: urls))
+                }
             }
         }
         .confirmationDialog(
@@ -1119,15 +1282,17 @@ struct RecordEditorView: View {
                     let isVideo = item.supportedContentTypes.contains {
                         $0.conforms(to: .movie) || $0.conforms(to: .audiovisualContent)
                     }
-                    guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-                    let ext = item.supportedContentTypes.first?.preferredFilenameExtension
-                        ?? (isVideo ? "mov" : "jpg")
-                    if let attachment = store.addMediaData(
-                        data,
-                        fileExtension: ext,
-                        type: isVideo ? .video : .photo
-                    ) {
-                        new.append(attachment)
+                    if isVideo {
+                        // 영상은 메모리에 통째로 올리지 않고 임시 파일로 받는다
+                        guard let video = try? await item.loadTransferable(type: PickedVideo.self) else { continue }
+                        new.append(contentsOf: await store.importAttachments(from: [video.url]))
+                        try? FileManager.default.removeItem(at: video.url)
+                    } else {
+                        guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+                        let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+                        if let attachment = store.addMediaData(data, fileExtension: ext, type: .photo) {
+                            new.append(attachment)
+                        }
                     }
                 }
                 appendAttachments(new)
@@ -1253,8 +1418,8 @@ struct RecordEditorView: View {
                     } catch {
                         return
                     }
-                    DispatchQueue.main.async {
-                        appendAttachments(store.importAttachments(from: [copied]))
+                    Task { @MainActor in
+                        appendAttachments(await store.importAttachments(from: [copied]))
                         try? FileManager.default.removeItem(at: copied)
                     }
                 }
@@ -1278,8 +1443,8 @@ struct RecordEditorView: View {
                         url = direct
                     }
                     guard let url else { return }
-                    DispatchQueue.main.async {
-                        appendAttachments(store.importAttachments(from: [url]))
+                    Task { @MainActor in
+                        appendAttachments(await store.importAttachments(from: [url]))
                     }
                 }
             }
@@ -1466,7 +1631,7 @@ struct BirthStoryView: View {
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result, let url = urls.first {
-                store.setCoverPhoto(from: url)
+                Task { await store.setCoverPhoto(from: url) }
             }
         }
     }
@@ -1583,8 +1748,8 @@ struct BirthStoryView: View {
                     url = direct
                 }
                 guard let url else { return }
-                DispatchQueue.main.async {
-                    store.setCoverPhoto(from: url)
+                Task { @MainActor in
+                    await store.setCoverPhoto(from: url)
                 }
             }
             return true
@@ -1699,6 +1864,7 @@ struct AlbumSyncView: View {
     @State private var albums: [AlbumInfo] = []
     @State private var status: PHAuthorizationStatus = .notDetermined
     @State private var isSyncing = false
+    @State private var syncTask: Task<Void, Never>?
     @State private var progressText = ""
     @State private var resultText = ""
 
@@ -1805,15 +1971,22 @@ struct AlbumSyncView: View {
             }
 
             Button {
-                Task { await sync() }
+                if isSyncing {
+                    syncTask?.cancel()
+                } else {
+                    syncTask = Task { await sync() }
+                }
             } label: {
-                Label("지금 동기화", systemImage: "arrow.triangle.2.circlepath")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                Label(
+                    isSyncing ? "동기화 중단" : "지금 동기화",
+                    systemImage: isSyncing ? "stop.circle" : "arrow.triangle.2.circlepath"
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.accent)
-            .disabled(store.data.syncedAlbumId == nil || isSyncing)
+            .tint(isSyncing ? .gray : Theme.accent)
+            .disabled(store.data.syncedAlbumId == nil)
         }
     }
 
@@ -1853,7 +2026,10 @@ struct AlbumSyncView: View {
 
         isSyncing = true
         resultText = ""
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            syncTask = nil
+        }
 
         var assets: [PHAsset] = []
         PHAsset.fetchAssets(in: collection, options: nil).enumerateObjects { asset, _, _ in
@@ -1864,7 +2040,13 @@ struct AlbumSyncView: View {
         }
 
         var imported = 0
+        var failed = 0
+        var cancelled = false
         for (index, asset) in fresh.enumerated() {
+            if Task.isCancelled {
+                cancelled = true
+                break
+            }
             progressText = "가져오는 중… \(index + 1)/\(fresh.count)"
             guard let creationDate = asset.creationDate else { continue }
             do {
@@ -1874,17 +2056,31 @@ struct AlbumSyncView: View {
                     store.update(record)
                     store.data.syncedAssetIds.insert(asset.localIdentifier)
                     imported += 1
+                    // 도중에 앱이 꺼져도 같은 항목을 중복으로 가져오지 않도록 중간 저장
+                    if imported % 20 == 0 {
+                        await store.flush()
+                    }
                 }
             } catch {
+                failed += 1
                 print("앨범 항목 가져오기 실패: \(error)")
             }
         }
 
-        store.data.lastSyncDate = Date()
+        if !cancelled {
+            store.data.lastSyncDate = Date()
+        }
+        await store.flush()
         progressText = ""
-        resultText = imported == 0
-            ? "새로 가져올 항목이 없어요"
-            : "사진·영상 \(imported)개를 날짜별 기록에 넣었어요"
+        if cancelled {
+            resultText = "중단했어요. 지금까지 가져온 \(imported)개는 저장돼 있어요"
+        } else if imported == 0 && failed == 0 {
+            resultText = "새로 가져올 항목이 없어요"
+        } else if failed > 0 {
+            resultText = "\(imported)개 가져옴 · \(failed)개 실패 (다음 동기화 때 다시 시도돼요)"
+        } else {
+            resultText = "사진·영상 \(imported)개를 날짜별 기록에 넣었어요"
+        }
     }
 
     /// 원본 리소스를 Media 폴더로 내려받아 첨부를 만든다.
@@ -1910,16 +2106,230 @@ struct AlbumSyncView: View {
 
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true   // iCloud에만 있는 원본도 내려받기
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            PHAssetResourceManager.default().writeData(for: resource, toFile: fileURL, options: options) { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                PHAssetResourceManager.default().writeData(for: resource, toFile: fileURL, options: options) { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+        } catch {
+            // 내려받다 만 파일이 남지 않도록 정리
+            try? FileManager.default.removeItem(at: fileURL)
+            throw error
+        }
+        return MediaAttachment(id: UUID(), fileName: fileName, type: isVideo ? .video : .photo)
+    }
+}
+
+
+/// 데이터 백업·복원 화면.
+/// 기록 전체(store.json + Media 폴더)를 사용자가 고른 폴더로 내보내거나 되가져온다.
+struct BackupView: View {
+    @EnvironmentObject private var store: Store
+
+    private enum FolderPickerMode {
+        case backup
+        case restore
+    }
+
+    @State private var pickerMode: FolderPickerMode?
+    @State private var showingPicker = false
+    @State private var confirmingRestore = false
+    @State private var pendingRestoreURL: URL?
+    @State private var isWorking = false
+    @State private var message = ""
+    @State private var mediaSizeText = "계산 중…"
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                statsCard
+                backupCard
+                restoreCard
+                statusSection
+            }
+            .padding()
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Theme.background.ignoresSafeArea())
+        .navigationTitle("백업")
+        .task { await loadStats() }
+        .fileImporter(
+            isPresented: $showingPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            switch pickerMode {
+            case .backup:
+                runBackup(to: url)
+            case .restore:
+                pendingRestoreURL = url
+                confirmingRestore = true
+            case nil:
+                break
+            }
+        }
+        .confirmationDialog(
+            "지금 앱에 있는 모든 기록이 선택한 백업 내용으로 교체됩니다. 계속할까요?",
+            isPresented: $confirmingRestore,
+            titleVisibility: .visible
+        ) {
+            Button("백업 내용으로 교체", role: .destructive) {
+                if let url = pendingRestoreURL {
+                    runRestore(from: url)
                 }
             }
         }
-        return MediaAttachment(id: UUID(), fileName: fileName, type: isVideo ? .video : .photo)
+    }
+
+    // MARK: - 카드들
+
+    private var statsCard: some View {
+        let attachments = store.data.records.values.flatMap { $0.attachments }
+        let photoCount = attachments.filter { $0.type == .photo }.count
+        let videoCount = attachments.filter { $0.type == .video }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("지금까지의 기록").font(.headline)
+            HStack(spacing: 24) {
+                stat("기록한 날", "\(store.data.records.count)일")
+                stat("사진", "\(photoCount)장")
+                stat("영상", "\(videoCount)개")
+                stat("미디어 용량", mediaSizeText)
+            }
+            Text("모든 데이터는 이 앱 안에만 저장돼요. 앱(프로젝트)을 삭제하면 기록도 함께 사라지니, 주기적으로 백업해 두는 것을 권해요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.headline)
+                .foregroundColor(Theme.accent)
+        }
+    }
+
+    private var backupCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("백업 만들기").font(.headline)
+            Text("폴더를 고르면 그 안에 'BabyDays 백업 (날짜)' 폴더가 만들어지고 글과 사진·영상 전체가 복사돼요. iCloud Drive나 외장 디스크 폴더를 고르면 더 안전합니다.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Button {
+                pickerMode = .backup
+                showingPicker = true
+            } label: {
+                Label("백업 폴더 선택…", systemImage: "externaldrive.badge.plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.accent)
+            .disabled(isWorking)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    private var restoreCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("백업에서 복원").font(.headline)
+            Text("이전에 만든 'BabyDays 백업 …' 폴더를 고르면 그 시점의 기록으로 되돌립니다. 지금 앱에 있는 기록은 백업 내용으로 교체돼요.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Button {
+                pickerMode = .restore
+                showingPicker = true
+            } label: {
+                Label("백업 폴더에서 복원…", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(.bordered)
+            .tint(Theme.accent)
+            .disabled(isWorking)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    @ViewBuilder
+    private var statusSection: some View {
+        if isWorking {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("복사 중… 사진·영상이 많으면 시간이 걸려요")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        } else if !message.isEmpty {
+            Text(message)
+                .font(.callout.bold())
+                .foregroundColor(Theme.accent)
+        }
+    }
+
+    // MARK: - 동작
+
+    private func loadStats() async {
+        let mediaURL = store.documentsURL.appendingPathComponent("Media", isDirectory: true)
+        let size = await Task.detached(priority: .utility) {
+            Store.folderSize(at: mediaURL)
+        }.value
+        mediaSizeText = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    private func runBackup(to folder: URL) {
+        isWorking = true
+        message = ""
+        Task {
+            await store.flush()   // 마지막 변경까지 디스크에 반영한 뒤 복사한다
+            let documents = store.documentsURL
+            let scoped = folder.startAccessingSecurityScopedResource()
+            defer {
+                if scoped { folder.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let name = try await Task.detached(priority: .userInitiated) {
+                    try Store.performBackup(from: documents, to: folder)
+                }.value
+                message = "백업 완료! 만들어진 폴더: \(name)"
+            } catch {
+                message = "백업 실패: \(error.localizedDescription)"
+            }
+            isWorking = false
+        }
+    }
+
+    private func runRestore(from folder: URL) {
+        isWorking = true
+        message = ""
+        Task {
+            let documents = store.documentsURL
+            let scoped = folder.startAccessingSecurityScopedResource()
+            defer {
+                if scoped { folder.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try Store.performRestore(from: folder, into: documents)
+                }.value
+                store.reloadFromDisk()
+                message = "복원 완료!"
+                await loadStats()
+            } catch {
+                message = "복원 실패: 선택한 폴더에 올바른 백업(store.json)이 없어요. (\(error.localizedDescription))"
+            }
+            isWorking = false
+        }
     }
 }
 
@@ -2004,6 +2414,22 @@ struct ShareCardView: View {
     }
 }
 
+
+/// 사진 보관함에서 고른 영상을 메모리에 통째로 올리지 않고
+/// 임시 파일로 받아 오기 위한 전송 타입.
+struct PickedVideo: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let copy = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString + "." + ext)
+            try FileManager.default.copyItem(at: received.file, to: copy)
+            return PickedVideo(url: copy)
+        }
+    }
+}
 
 /// Media 폴더에 저장된 이미지를 표시하는 공용 뷰.
 /// thumbnailSize를 주면 그 픽셀 크기로 축소해 메모리를 아낀다.

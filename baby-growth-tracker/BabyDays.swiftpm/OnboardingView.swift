@@ -98,5 +98,6 @@ struct OnboardingView: View {
         if height != nil || weight != nil {
             store.addGrowth(GrowthEntry(id: UUID(), date: birthDate, heightCm: height, weightKg: weight))
         }
+        store.saveNow()   // 첫 등록 정보는 바로 디스크에 남긴다
     }
 }

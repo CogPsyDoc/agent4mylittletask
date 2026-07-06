@@ -2,6 +2,24 @@ import SwiftUI
 import AVKit
 import AVFoundation
 import UIKit
+import CoreTransferable
+import UniformTypeIdentifiers
+
+/// 사진 보관함에서 고른 영상을 메모리에 통째로 올리지 않고
+/// 임시 파일로 받아 오기 위한 전송 타입.
+struct PickedVideo: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { received in
+            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let copy = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString + "." + ext)
+            try FileManager.default.copyItem(at: received.file, to: copy)
+            return PickedVideo(url: copy)
+        }
+    }
+}
 
 /// Media 폴더에 저장된 이미지를 표시하는 공용 뷰.
 /// thumbnailSize를 주면 그 픽셀 크기로 축소해 메모리를 아낀다.
