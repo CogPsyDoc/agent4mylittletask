@@ -104,8 +104,23 @@ npm start
 
 ---
 
+## ☁️ Cloudflare 실시간 에이전트 (신규)
+
+로컬 서버 없이 **인터넷 어디서든, 여러 기기에서 실시간으로** 쓰고 싶다면
+[`cloudflare/`](./cloudflare/README.md)의 Cloudflare 에이전트를 배포하세요.
+
+- Durable Object 기반 에이전트가 세션/정리 메타/이어진 대화를 클라우드에 저장
+- 접속한 모든 기기에 WebSocket으로 실시간 동기화 (즐겨찾기, 채팅 스트리밍, 활동 피드)
+- ⏰ 알람 기반 리마인더 — 접속이 끊겨 있어도 에이전트가 깨어나 실행
+- `cloudflare/scripts/sync-up.js` 로 로컬 트랜스크립트를 자동 업로드 (`--watch`)
+- 🔒 `SYNC_TOKEN`(업로드) / `VIEW_TOKEN`(뷰어) 토큰 인증
+
+```bash
+cd cloudflare && npm install && npm run deploy
+node scripts/sync-up.js --url https://<워커주소> --watch
+```
+
 ## 다음 단계 (원하면 확장)
 
-- **클라우드 배포 + 자동 업로드**: 로컬 트랜스크립트를 주기적으로 서버로 동기화해 인터넷 어디서든 접속
-- **다중 사용자/로그인**: 여러 사람이 각자 계정으로 쓰도록 인증 추가
+- **다중 사용자/로그인**: 여러 사람이 각자 계정으로 쓰도록 인증 추가 (Cloudflare Access 등)
 - **이어진 대화에서 도구 사용**: 지금 이어서 대화는 일반 채팅 (파일 읽기/실행 없음)

@@ -1,0 +1,21 @@
+{
+  "name": "cowork-sync-agent",
+  "version": "0.1.0",
+  "description": "Cowork Sync를 위한 Cloudflare 에이전트 — Durable Object 기반 실시간 동기화 + Claude 채팅",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "wrangler types && tsc --noEmit",
+    "sync": "node scripts/sync-up.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "agents": "^0.17.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "wrangler": "^4.110.0"
+  }
+}
