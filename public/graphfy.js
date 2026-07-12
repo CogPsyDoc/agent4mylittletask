@@ -415,6 +415,19 @@ function draw() {
       ctx.stroke();
     }
 
+    // 노트가 있는 노드는 우상단에 작은 표식
+    if (n.note) {
+      const mx = n.x + r * 0.74;
+      const my = n.y - r * 0.74;
+      ctx.beginPath();
+      ctx.arc(mx, my, Math.max(2.6, r * 0.16), 0, Math.PI * 2);
+      ctx.fillStyle = '#e0785a';
+      ctx.fill();
+      ctx.lineWidth = 1.5 / view.k;
+      ctx.strokeStyle = SURFACE;
+      ctx.stroke();
+    }
+
     // 이모지
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -641,6 +654,7 @@ function selectNode(id) {
   $('#panelType').innerHTML = typeOptions(n.type);
   $('#panelEmojiInput').value = n.emoji || '';
   $('#panelDesc').value = n.desc || '';
+  renderNote(n);
   updateLocalBtn();
   renderLinks(n);
   $('#hint').classList.add('hide');
@@ -687,6 +701,134 @@ function hidePanel() {
   $('#panel').hidden = true;
   setLinking(false);
 }
+
+// ---------- 미니 마크다운 렌더러 ([[위키링크]] 지원) ----------
+
+function findNodeByRef(ref) {
+  const q = ref.trim().toLowerCase();
+  return (
+    state.graph.nodes.find((n) => n.id.toLowerCase() === q) ||
+    state.graph.nodes.find((n) => n.label.toLowerCase() === q) ||
+    state.graph.nodes.find((n) => n.label.toLowerCase().includes(q))
+  );
+}
+
+function renderMarkdown(src) {
+  // 1) 전부 이스케이프 → 이후 패턴만 HTML로 되살림
+  let text = escapeHtml(src);
+
+  // 2) 코드블록 보호
+  const blocks = [];
+  text = text.replace(/```([\s\S]*?)```/g, (_, code) => {
+    blocks.push(`<pre><code>${code.replace(/^\n|\n$/g, '')}</code></pre>`);
+    return ` B${blocks.length - 1} `;
+  });
+
+  // 3) 인라인 요소
+  text = text
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\[\[([^\]\n]+)\]\]/g, (_, ref) => {
+      const n = findNodeByRef(ref);
+      return n
+        ? `<a class="wiki" data-node="${escapeHtml(n.id)}">${escapeHtml(n.emoji ? n.emoji + ' ' : '')}${escapeHtml(ref)}</a>`
+        : `<span class="wiki missing" title="노드를 찾을 수 없어요">${escapeHtml(ref)}</span>`;
+    })
+    .replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+
+  // 4) 줄 단위 블록 요소
+  const lines = text.split('\n');
+  const out = [];
+  let list = null; // 'ul' | 'ol'
+  const closeList = () => {
+    if (list) { out.push(`</${list}>`); list = null; }
+  };
+  for (const line of lines) {
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (h) {
+      closeList();
+      const lv = Math.min(4, h[1].length);
+      out.push(`<h${lv + 2}>${h[2]}</h${lv + 2}>`); // h3~h6로 매핑
+    } else if (ul) {
+      if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
+      out.push(`<li>${ul[1]}</li>`);
+    } else if (ol) {
+      if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
+      out.push(`<li>${ol[1]}</li>`);
+    } else if (/^\s*(---|\*\*\*)\s*$/.test(line)) {
+      closeList();
+      out.push('<hr>');
+    } else if (/^&gt;\s?/.test(line)) {
+      closeList();
+      out.push(`<blockquote>${line.replace(/^&gt;\s?/, '')}</blockquote>`);
+    } else if (line.trim() === '') {
+      closeList();
+      out.push('');
+    } else {
+      closeList();
+      out.push(`<p>${line}</p>`);
+    }
+  }
+  closeList();
+
+  // 5) 코드블록 복원
+  return out.join('\n').replace(/ B(\d+) /g, (_, i) => blocks[Number(i)]);
+}
+
+// ---------- 노트 (마크다운) ----------
+
+let noteEditing = false;
+
+function renderNote(n) {
+  noteEditing = false;
+  const view = $('#noteView');
+  const edit = $('#noteEdit');
+  edit.hidden = true;
+  view.hidden = false;
+  $('#btnNoteEdit').textContent = '✏️ 편집';
+  if (n.note && n.note.trim()) {
+    view.innerHTML = renderMarkdown(n.note);
+    view.classList.remove('empty');
+    for (const a of view.querySelectorAll('a.wiki[data-node]')) {
+      a.addEventListener('click', () => {
+        const id = a.dataset.node;
+        selectNode(id);
+        centerOn(id, Math.max(state.view.tk, 0.9));
+      });
+    }
+  } else {
+    view.innerHTML = '노트가 없어요. ✏️ 편집을 눌러 마크다운으로 적어보세요.';
+    view.classList.add('empty');
+  }
+}
+
+$('#btnNoteEdit').onclick = () => {
+  const n = nodeById(state.selected);
+  if (!n) return;
+  noteEditing = !noteEditing;
+  if (noteEditing) {
+    $('#noteView').hidden = true;
+    const edit = $('#noteEdit');
+    edit.hidden = false;
+    edit.value = n.note || '';
+    $('#btnNoteEdit').textContent = '👁 보기';
+    edit.focus();
+  } else {
+    renderNote(n);
+  }
+};
+
+$('#noteEdit').addEventListener('input', () => {
+  const n = nodeById(state.selected);
+  if (!n) return;
+  const v = $('#noteEdit').value;
+  if (v.trim()) n.note = v;
+  else delete n.note;
+  scheduleSave();
+});
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -982,6 +1124,9 @@ $('#suggestClose').onclick = () => {
 setTimeout(() => $('#hint').classList.add('hide'), 6000);
 
 // ---------- 시작 ----------
+
+// 콘솔/테스트용 훅
+window.__gfy = { state, selectNode, centerOn, nodeById };
 
 window.addEventListener('resize', resize);
 resize();

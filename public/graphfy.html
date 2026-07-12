@@ -64,8 +64,17 @@
               </label>
             </div>
             <label class="field">설명
-              <textarea id="panelDesc" rows="4" spellcheck="false"></textarea>
+              <textarea id="panelDesc" rows="3" spellcheck="false"></textarea>
             </label>
+            <div class="panel-section">
+              <div class="section-head">
+                <strong>노트</strong>
+                <button id="btnNoteEdit" class="btn small">✏️ 편집</button>
+              </div>
+              <div id="noteView" class="note-view"></div>
+              <textarea id="noteEdit" rows="10" spellcheck="false" hidden
+                placeholder="마크다운으로 자유롭게 적어보세요.&#10;[[노드이름]] 으로 다른 노드에 링크할 수 있어요."></textarea>
+            </div>
             <div class="panel-section">
               <div class="section-head">
                 <strong>연결</strong>
