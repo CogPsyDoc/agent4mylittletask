@@ -3,3 +3,8 @@ data/
 *.log
 .DS_Store
 .env
+
+# Cloudflare (cloudflare/)
+.dev.vars
+.wrangler/
+worker-configuration.d.ts
