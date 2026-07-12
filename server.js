@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findSessionFiles, parseSessionFile } from './lib/parser.js';
 import { MetaStore } from './lib/store.js';
-import { GraphStore } from './lib/graphfy.js';
+import { GraphStore, SuggestionStore } from './lib/graphfy.js';
 import {
   CHAT_MODEL,
   ContinuationStore,
@@ -42,6 +42,7 @@ const graphfy = new GraphStore(
   path.join(__dirname, 'data', 'graphfy.json'),
   path.join(__dirname, 'sample-data', 'graphfy-seed.json'),
 );
+const graphfySuggestions = new SuggestionStore(path.join(__dirname, 'data', 'graphfy-suggestions.json'));
 
 // ---- 세션 캐시 ----
 // 파싱은 비용이 있으니 목록/본문을 캐시하고, TTL 지나면 다시 스캔.
@@ -273,6 +274,26 @@ app.put('/api/graphfy', (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// 제안함 — /graphfy-update 루틴이 넣고, UI에서 추가/무시로 확정
+app.get('/api/graphfy/suggestions', (req, res) => {
+  res.json({ suggestions: graphfySuggestions.list() });
+});
+
+app.post('/api/graphfy/suggestions', (req, res) => {
+  try {
+    const added = graphfySuggestions.add(req.body);
+    res.json({ added, pending: graphfySuggestions.list().length });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/graphfy/suggestions/:id', (req, res) => {
+  const removed = graphfySuggestions.remove(req.params.id);
+  if (!removed) return res.status(404).json({ error: 'not found' });
+  res.json({ ok: true, pending: graphfySuggestions.list().length });
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, dir: TRANSCRIPTS_DIR }));

@@ -213,6 +213,24 @@ body {
 .link-list .unlink { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
 .link-list .unlink:hover { color: #e66767; }
 
+/* ---------- 제안함 ---------- */
+.suggest-btn b { color: var(--accent-2); font-weight: 650; }
+.suggest-panel { left: 12px; right: auto; width: 360px; }
+.panel-title-fixed { flex: 1; font-size: 16px; }
+.suggest-help { font-size: 12px; margin: 0 0 10px; line-height: 1.5; }
+.suggest-help code { background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: 11px; }
+.sg-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sg-item { background: var(--bg-3); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; }
+.sg-title { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; }
+.sg-title .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.sg-desc { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+.sg-links { font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+.sg-links b { color: var(--text); font-weight: 550; }
+.sg-reason { font-size: 11px; color: var(--accent-2); margin-top: 5px; }
+.sg-actions { display: flex; gap: 6px; margin-top: 9px; }
+.sg-actions .btn { flex: 1; padding: 5px 0; font-size: 12.5px; border-radius: 7px; }
+.sg-empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 16px 0; }
+
 @media (max-width: 640px) {
   #gfySearch { width: 120px; }
   .subtitle { display: none; }

@@ -847,6 +847,137 @@ $('#importFile').addEventListener('change', async (ev) => {
   ev.target.value = '';
 });
 
+// ---------- 제안함 (자동 갱신 루틴 → 사용자 승인) ----------
+
+const suggest = { items: [] };
+
+async function loadSuggestions() {
+  if (!state.serverMode) return;
+  try {
+    const res = await fetch('/api/graphfy/suggestions');
+    if (!res.ok) return;
+    suggest.items = (await res.json()).suggestions || [];
+  } catch {
+    return;
+  }
+  renderSuggestBadge();
+}
+
+function renderSuggestBadge() {
+  const btn = $('#btnSuggest');
+  const n = suggest.items.length;
+  btn.hidden = !state.serverMode || (n === 0 && $('#suggestPanel').hidden);
+  $('#suggestCount').textContent = n;
+}
+
+function suggestNodeLabel(id) {
+  const n = nodeById(id);
+  return n ? `${n.emoji || ''} ${n.label}`.trim() : id;
+}
+
+function renderSuggestList() {
+  const ul = $('#suggestList');
+  ul.innerHTML = '';
+  if (!suggest.items.length) {
+    ul.innerHTML = '<li class="sg-empty">대기 중인 제안이 없어요.<br>Claude Code에서 <b>/graphfy-update</b>를 실행해 보세요.</li>';
+    return;
+  }
+  for (const s of suggest.items) {
+    const li = document.createElement('li');
+    li.className = 'sg-item';
+    if (s.kind === 'edge') {
+      const ok = nodeById(s.source) && nodeById(s.target);
+      li.innerHTML = `
+        <div class="sg-title"><span class="dot" style="background:#8b93a1"></span>연결 제안</div>
+        <div class="sg-links"><b>${escapeHtml(suggestNodeLabel(s.source))}</b> ↔ <b>${escapeHtml(suggestNodeLabel(s.target))}</b>${s.label ? ` · ${escapeHtml(s.label)}` : ''}</div>
+        ${s.reason ? `<div class="sg-reason">💡 ${escapeHtml(s.reason)}</div>` : ''}
+        <div class="sg-actions">
+          <button class="btn accent sg-accept" ${ok ? '' : 'disabled title="노드를 찾을 수 없어요"'}>추가</button>
+          <button class="btn sg-dismiss">무시</button>
+        </div>`;
+    } else {
+      const color = TYPES[s.type]?.color || '#8b93a1';
+      const links = (s.connectTo || []).filter((c) => nodeById(c.id));
+      li.innerHTML = `
+        <div class="sg-title"><span class="dot" style="background:${color}"></span>${escapeHtml(s.emoji || '')} ${escapeHtml(s.label)} <span style="color:var(--muted);font-weight:400">· ${TYPES[s.type]?.label || s.type}</span></div>
+        ${s.desc ? `<div class="sg-desc">${escapeHtml(s.desc)}</div>` : ''}
+        ${links.length ? `<div class="sg-links">연결: ${links.map((c) => `<b>${escapeHtml(suggestNodeLabel(c.id))}</b>${c.label ? `(${escapeHtml(c.label)})` : ''}`).join(', ')}</div>` : ''}
+        ${s.reason ? `<div class="sg-reason">💡 ${escapeHtml(s.reason)}${s.sourceInfo ? ` — ${escapeHtml(s.sourceInfo)}` : ''}</div>` : ''}
+        <div class="sg-actions">
+          <button class="btn accent sg-accept">추가</button>
+          <button class="btn sg-dismiss">무시</button>
+        </div>`;
+    }
+    li.querySelector('.sg-accept')?.addEventListener('click', () => acceptSuggestion(s));
+    li.querySelector('.sg-dismiss').addEventListener('click', () => resolveSuggestion(s, false));
+    ul.appendChild(li);
+  }
+}
+
+function acceptSuggestion(s) {
+  if (s.kind === 'edge') {
+    if (nodeById(s.source) && nodeById(s.target)) {
+      const id = 'e' + (Date.now() % 1e7).toString(36) + Math.floor(Math.random() * 100);
+      const dup = state.graph.edges.some(
+        (e) => (e.source === s.source && e.target === s.target) || (e.source === s.target && e.target === s.source),
+      );
+      if (!dup) state.graph.edges.push({ id, source: s.source, target: s.target, label: s.label || '', w: 1 });
+    }
+  } else {
+    // 새 노드 — 첫 연결 노드 근처에 배치
+    let id = s.label.toLowerCase().replace(/[^a-z0-9가-힣]+/g, '').slice(0, 24) || 'n';
+    while (nodeById(id)) id += '_';
+    const anchor = (s.connectTo || []).map((c) => nodeById(c.id)).find(Boolean) || nodeById('me');
+    const node = {
+      id,
+      type: s.type,
+      label: s.label,
+      emoji: s.emoji || '',
+      desc: s.desc || '',
+      x: (anchor ? anchor.x : 0) + 60 + Math.random() * 40,
+      y: (anchor ? anchor.y : 0) + 60 + Math.random() * 40,
+      vx: 0,
+      vy: 0,
+      _hs: 1,
+    };
+    state.graph.nodes.push(node);
+    for (const c of s.connectTo || []) {
+      if (!nodeById(c.id)) continue;
+      const eid = 'e' + (Date.now() % 1e7).toString(36) + Math.floor(Math.random() * 100);
+      state.graph.edges.push({ id: eid, source: id, target: c.id, label: c.label || '', w: 1 });
+    }
+    selectNode(id);
+    centerOn(id, Math.max(state.view.tk, 0.9));
+  }
+  buildLegend();
+  updateLocalSet();
+  reheat(0.4);
+  scheduleSave();
+  resolveSuggestion(s, true);
+}
+
+async function resolveSuggestion(s) {
+  suggest.items = suggest.items.filter((x) => x.id !== s.id);
+  renderSuggestBadge();
+  renderSuggestList();
+  try {
+    await fetch(`/api/graphfy/suggestions/${encodeURIComponent(s.id)}`, { method: 'DELETE' });
+  } catch (err) {
+    console.warn('[graphfy] 제안 삭제 실패:', err);
+  }
+}
+
+$('#btnSuggest').onclick = () => {
+  const panel = $('#suggestPanel');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) renderSuggestList();
+  renderSuggestBadge();
+};
+$('#suggestClose').onclick = () => {
+  $('#suggestPanel').hidden = true;
+  renderSuggestBadge();
+};
+
 // 5초 뒤 힌트 감춤
 setTimeout(() => $('#hint').classList.add('hide'), 6000);
 
@@ -857,5 +988,6 @@ resize();
 load().then(() => {
   resize();
   fitView(false);
+  loadSuggestions();
 });
 requestAnimationFrame(loop);

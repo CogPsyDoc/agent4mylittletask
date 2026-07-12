@@ -80,6 +80,16 @@ Obsidian의 Graph view처럼, **나를 둘러싼 사람·프로젝트·조직·�
 - 변경 사항은 `data/graphfy.json`에 자동 저장 (노드 위치 포함), JSON 내보내기/가져오기 지원
 - 첫 실행 시 `sample-data/graphfy-seed.json`을 시드로 사용 — 자기 것으로 마음껏 고쳐 쓰세요
 
+### 자동 갱신 (`/graphfy-update`)
+
+캘린더·메일·노션을 훑어 그래프에 없는 새 사람/프로젝트/관계를 찾아 **제안함**에 넣는 루틴입니다.
+그래프를 직접 고치지 않고, Graphfy 상단의 `🔔 제안` 배지 → 패널에서 **추가/무시**로 확정합니다.
+
+- Claude Code 세션(커넥터 연결 상태)에서 `/graphfy-update` 입력
+- 주기 실행: `claude -p "/graphfy-update"` 를 cron에 등록 (예: 매주 월 9시 `0 9 * * 1`)
+- 수동 등록도 가능: `node scripts/graphfy-suggest.js <suggestions.json | ->` (형식은 스크립트 주석 참고)
+- 제안은 `data/graphfy-suggestions.json`에 대기하며 API는 `GET/POST /api/graphfy/suggestions`, `DELETE /api/graphfy/suggestions/:id`
+
 ## 기능
 
 - 💬 **이어서 대화하기** — 지난 세션의 맥락을 그대로 실어 Claude와 계속 대화 (API 키 필요, 스트리밍)
