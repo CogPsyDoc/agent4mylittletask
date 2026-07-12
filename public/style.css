@@ -42,7 +42,9 @@ body {
   gap: 10px;
   padding: 16px 16px 8px;
 }
-.side-head h1 { font-size: 16px; margin: 0; font-weight: 650; }
+.side-head h1 { font-size: 16px; margin: 0; font-weight: 650; flex: 1; }
+.gfy-link { text-decoration: none; font-size: 16px; opacity: .8; }
+.gfy-link:hover { opacity: 1; }
 .search-wrap { padding: 4px 12px 10px; }
 #search {
   width: 100%;

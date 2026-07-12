@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1115" />
+    <title>Graphfy — 나의 그래프</title>
+    <link rel="stylesheet" href="/graphfy.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕸️</text></svg>" />
+  </head>
+  <body>
+    <div id="gfy">
+      <header class="topbar">
+        <a class="home-link" href="/" title="Cowork Sync로">💬</a>
+        <h1 id="gfyTitle">🕸️ Graphfy</h1>
+        <span id="gfySubtitle" class="subtitle"></span>
+        <div class="spacer"></div>
+        <input id="gfySearch" type="search" placeholder="노드 검색…" autocomplete="off" />
+        <button id="btnSuggest" class="btn suggest-btn" title="자동 갱신 제안함" hidden>🔔 제안 <b id="suggestCount">0</b></button>
+        <button id="btnAddNode" class="btn accent" title="새 노드 추가">＋ 노드</button>
+        <button id="btnFit" class="btn" title="전체 보기">⤢</button>
+        <button id="btnExport" class="btn" title="JSON 내보내기">⬇</button>
+        <button id="btnImport" class="btn" title="JSON 가져오기">⬆</button>
+        <input id="importFile" type="file" accept="application/json" hidden />
+        <span id="saveState" class="save-state" aria-live="polite"></span>
+      </header>
+
+      <div id="legend" class="legend" role="group" aria-label="노드 종류 필터"></div>
+
+      <main class="stage">
+        <canvas id="canvas" aria-label="지식 그래프"></canvas>
+        <div id="hint" class="hint">노드를 클릭하면 상세를 볼 수 있어요 · 드래그로 이동 · 휠/핀치로 줌</div>
+
+        <!-- 제안함 (자동 갱신 루틴이 넣은 노드/관계 제안) -->
+        <aside id="suggestPanel" class="panel suggest-panel" hidden>
+          <div class="panel-head">
+            <span class="panel-emoji">🔔</span>
+            <strong class="panel-title-fixed">제안함</strong>
+            <button id="suggestClose" class="btn ghost" aria-label="닫기">✕</button>
+          </div>
+          <div class="panel-body">
+            <p class="suggest-help muted">
+              <code>/graphfy-update</code> 루틴이 캘린더·메일·노션에서 찾은 새 노드/관계 제안이에요.
+              추가를 누르면 그래프에 반영됩니다.
+            </p>
+            <ul id="suggestList" class="sg-list"></ul>
+          </div>
+        </aside>
+
+        <!-- 노드 상세/편집 패널 -->
+        <aside id="panel" class="panel" hidden>
+          <div class="panel-head">
+            <span id="panelEmoji" class="panel-emoji"></span>
+            <input id="panelLabel" class="panel-title" spellcheck="false" />
+            <button id="panelClose" class="btn ghost" aria-label="닫기">✕</button>
+          </div>
+          <div class="panel-body">
+            <div class="field-row">
+              <label>종류
+                <select id="panelType"></select>
+              </label>
+              <label>이모지
+                <input id="panelEmojiInput" maxlength="4" />
+              </label>
+            </div>
+            <label class="field">설명
+              <textarea id="panelDesc" rows="3" spellcheck="false"></textarea>
+            </label>
+            <div class="panel-section">
+              <div class="section-head">
+                <strong>노트</strong>
+                <button id="btnNoteEdit" class="btn small">✏️ 편집</button>
+              </div>
+              <div id="noteView" class="note-view"></div>
+              <textarea id="noteEdit" rows="10" spellcheck="false" hidden
+                placeholder="마크다운으로 자유롭게 적어보세요.&#10;[[노드이름]] 으로 다른 노드에 링크할 수 있어요."></textarea>
+            </div>
+            <div class="panel-section">
+              <div class="section-head">
+                <strong>연결</strong>
+                <span class="section-btns">
+                  <button id="btnLocal" class="btn small" title="이 노드와 이웃만 보기">◎ 로컬 그래프</button>
+                  <button id="btnLink" class="btn small">＋ 연결 추가</button>
+                </span>
+              </div>
+              <ul id="panelLinks" class="link-list"></ul>
+            </div>
+            <button id="btnDeleteNode" class="btn danger">노드 삭제</button>
+          </div>
+        </aside>
+      </main>
+    </div>
+    <script src="/graphfy.js" type="module"></script>
+  </body>
+</html>

@@ -67,6 +67,31 @@ npm start
 
 ---
 
+## 🕸️ Graphfy — 나에 대한 지식 그래프
+
+Obsidian의 Graph view처럼, **나를 둘러싼 사람·프로젝트·조직·관심사·일상을 노드-엣지 그래프로** 보고 편집하는 페이지입니다.
+
+- 접속: `http://localhost:4317/graphfy` (메인 화면의 🕸️ 아이콘)
+- 포스 레이아웃(자체 구현, 라이브러리 없음) + 캔버스 렌더링 — 드래그/줌(커서 기준)/팬/핀치 지원
+- 글로우·곡선 엣지·줌 연동 라벨 페이드·부드러운 포커스 전환 등 Obsidian Graph view 스타일
+- 노드 클릭 → 상세 패널에서 이름·종류·이모지·설명·관계 편집, `◎ 로컬 그래프`로 이웃만 보기
+- **노드별 마크다운 노트** — 패널에서 ✏️ 편집/👁 보기 토글, `[[노드이름]]` 위키링크로 노드 간 점프
+  (노트 있는 노드는 우상단에 주황 점 표시)
+- `＋ 노드`로 추가, `＋ 연결 추가` 후 다른 노드를 클릭하면 엣지 생성 (엣지 `w`(1~3)로 두께 가중치)
+- 종류(나/사람/프로젝트/조직/관심사/일상) 칩으로 필터, 검색으로 하이라이트
+- 변경 사항은 `data/graphfy.json`에 자동 저장 (노드 위치 포함), JSON 내보내기/가져오기 지원
+- 첫 실행 시 `sample-data/graphfy-seed.json`을 시드로 사용 — 자기 것으로 마음껏 고쳐 쓰세요
+
+### 자동 갱신 (`/graphfy-update`)
+
+캘린더·메일·노션을 훑어 그래프에 없는 새 사람/프로젝트/관계를 찾아 **제안함**에 넣는 루틴입니다.
+그래프를 직접 고치지 않고, Graphfy 상단의 `🔔 제안` 배지 → 패널에서 **추가/무시**로 확정합니다.
+
+- Claude Code 세션(커넥터 연결 상태)에서 `/graphfy-update` 입력
+- 주기 실행: `claude -p "/graphfy-update"` 를 cron에 등록 (예: 매주 월 9시 `0 9 * * 1`)
+- 수동 등록도 가능: `node scripts/graphfy-suggest.js <suggestions.json | ->` (형식은 스크립트 주석 참고)
+- 제안은 `data/graphfy-suggestions.json`에 대기하며 API는 `GET/POST /api/graphfy/suggestions`, `DELETE /api/graphfy/suggestions/:id`
+
 ## 기능
 
 - 💬 **이어서 대화하기** — 지난 세션의 맥락을 그대로 실어 Claude와 계속 대화 (API 키 필요, 스트리밍)
@@ -101,6 +126,9 @@ npm start
 | GET | `/api/config` | 채팅 활성화 여부/모델 |
 | GET | `/api/search?q=` | 전체 검색 |
 | GET | `/api/facets` | 폴더/태그/프로젝트 목록 |
+| GET | `/graphfy` | Graphfy 페이지 |
+| GET | `/api/graphfy` | 그래프(노드/엣지) 조회 |
+| PUT | `/api/graphfy` | 그래프 전체 저장 |
 
 ---
 
