@@ -1,0 +1,90 @@
+{
+  "meta": {
+    "title": "정종욱의 Graphfy",
+    "subtitle": "나를 둘러싼 사람 · 프로젝트 · 관심사 지도",
+    "generatedFrom": "Google Calendar / Gmail / Notion / Slack (2026-07-12 기준)"
+  },
+  "nodes": [
+    {
+      "id": "me",
+      "type": "self",
+      "label": "정종욱 (Hugh)",
+      "emoji": "🧑‍🚀",
+      "desc": "Ph.D. · 리콘랩스 Business Team Leader. 정부 R&D 과제와 XR/AI 콘텐츠 사업을 총괄한다. hugh@reconlabs.ai / cogpsydoc@gmail.com"
+    },
+
+    { "id": "reconlabs", "type": "org", "label": "리콘랩스", "emoji": "🏢", "desc": "RECONLabs — 3D/AI 스타트업. 서울 강남구 학동로 53길 30." },
+    { "id": "nmc", "type": "org", "label": "중앙응급의료센터", "emoji": "🚁", "desc": "국립중앙의료원 중앙응급의료센터. 닥터헬기·현장이송팀과 Pre-KTAS XR 콘텐츠 개발 용역으로 협업." },
+    { "id": "etri", "type": "org", "label": "ETRI", "emoji": "🔬", "desc": "한국전자통신연구원 XR원전실감가시화연구실. Scan2BIM 과제 주관 기관." },
+    { "id": "karts", "type": "org", "label": "한예종 AT랩", "emoji": "🎭", "desc": "한국예술종합학교 AT랩. 문화체육관광 R&D 공동 수행 기관." },
+    { "id": "kocca", "type": "org", "label": "콘진원 (KOCCA)", "emoji": "🎬", "desc": "한국콘텐츠진흥원. AI 콘텐츠 제작지원 사업." },
+    { "id": "whynot", "type": "org", "label": "와이낫미디어", "emoji": "📺", "desc": "숏폼/드라마 콘텐츠 제작사. 콘텐츠 사업 파트너." },
+    { "id": "paffle", "type": "org", "label": "파프리스튜디오", "emoji": "🎨", "desc": "콘텐츠 스튜디오. 이광현 대표와 협업 논의." },
+    { "id": "sogang", "type": "org", "label": "서강대 CICP", "emoji": "🎓", "desc": "서강대학교 CICP 프로그램. 정기 미팅으로 협력 중." },
+
+    { "id": "prektas", "type": "project", "label": "Pre-KTAS XR", "emoji": "🚑", "desc": "한국형 병원 전 중증도 분류(Pre-KTAS) XR 교육 콘텐츠. 15개 시나리오 제작, 2026년 5월 용역 완료 후 수정·검수 대응 중." },
+    { "id": "scan2bim", "type": "project", "label": "Scan2BIM", "emoji": "🏗️", "desc": "ETRI 주관 국책 과제. 매월 월간보고, 2026년 10월 KTC 공인인증 준비 중." },
+    { "id": "mcstrnd", "type": "project", "label": "문체부 R&D", "emoji": "📚", "desc": "문화체육관광 R&D 과제. 한예종 AT랩과 공동 수행 — 연구수행관리 컨설팅, 자체점검보고서 제출." },
+    { "id": "shortdrama", "type": "project", "label": "숏드라마 시리즈", "emoji": "🎞️", "desc": "AI 활용 숏드라마 콘텐츠 사업. 콘진원 제작지원 지원, 프로듀서 채용 인터뷰 진행 중." },
+    { "id": "coworksync", "type": "project", "label": "Cowork Sync", "emoji": "💬", "desc": "개인 사이드 프로젝트 — Claude Code 대화를 어느 기기에서든 보는 웹앱 (이 저장소!)." },
+
+    { "id": "ban", "type": "person", "label": "반성훈", "emoji": "👨‍💼", "desc": "리콘랩스 대표. weekly update / 주요 안건 논의를 함께한다." },
+    { "id": "vincent", "type": "person", "label": "Vincent", "emoji": "🧑‍💻", "desc": "리콘랩스 동료. 과제 실무를 함께하는 파트너." },
+    { "id": "matt", "type": "person", "label": "Matt (고영덕)", "emoji": "🧑‍💼", "desc": "리콘랩스 Business Developer. 행정·서류 업무를 함께 처리." },
+    { "id": "kimhi", "type": "person", "label": "김형일 교수", "emoji": "🩺", "desc": "Pre-KTAS XR 의학 자문. 시나리오·심전도 영상 감수." },
+    { "id": "nmcteam", "type": "person", "label": "고송희·신혜림·이수정", "emoji": "👩‍⚕️", "desc": "중앙응급의료센터 닥터헬기·현장이송팀 연구원들. Pre-KTAS 검수 실무 창구." },
+    { "id": "leejh", "type": "person", "label": "이지형 책임", "emoji": "👨‍🔬", "desc": "ETRI 책임연구원. Scan2BIM 과제 관리 담당." },
+    { "id": "leekh", "type": "person", "label": "이광현 대표", "emoji": "🎬", "desc": "파프리스튜디오 대표. 콘텐츠 협업 논의 (김아영 작가 미팅 등)." },
+    { "id": "limhj", "type": "person", "label": "임희준 이사", "emoji": "📺", "desc": "와이낫미디어 이사. 숏드라마 사업 파트너." },
+
+    { "id": "aiseminar", "type": "interest", "label": "AI 활용 세미나", "emoji": "🤖", "desc": "매주 수요일 사내 AI 활용 세미나." },
+    { "id": "xr", "type": "interest", "label": "XR/VR 콘텐츠", "emoji": "🥽", "desc": "XR 교육 콘텐츠, HMD 운영 — 주력 도메인." },
+    { "id": "aiagent", "type": "interest", "label": "AI 에이전트", "emoji": "⚙️", "desc": "Claude Code로 나만의 도구를 만들며 자동화를 실험 중." },
+    { "id": "rndmgmt", "type": "interest", "label": "R&D 과제 관리", "emoji": "📋", "desc": "정부 과제 기획·보고·인증 등 사업 관리 전반." },
+
+    { "id": "dad", "type": "life", "label": "새내기 아빠", "emoji": "👶", "desc": "최근 아빠가 되었다. 회사일도 집안일도 바쁜 나날." },
+    { "id": "phd", "type": "life", "label": "Ph.D.", "emoji": "🎓", "desc": "박사 출신 — 이메일 핸들 cogpsydoc로 미루어 인지심리학 배경으로 추정." }
+  ],
+  "edges": [
+    { "id": "e1", "source": "me", "target": "reconlabs", "label": "사업팀 리더" },
+    { "id": "e2", "source": "me", "target": "prektas", "label": "총괄 PM" },
+    { "id": "e3", "source": "me", "target": "scan2bim", "label": "과제 담당" },
+    { "id": "e4", "source": "me", "target": "mcstrnd", "label": "과제 담당" },
+    { "id": "e5", "source": "me", "target": "shortdrama", "label": "사업 개발" },
+    { "id": "e6", "source": "me", "target": "coworksync", "label": "만드는 중" },
+    { "id": "e7", "source": "me", "target": "aiseminar", "label": "매주 참여" },
+    { "id": "e8", "source": "me", "target": "xr" },
+    { "id": "e9", "source": "me", "target": "aiagent" },
+    { "id": "e10", "source": "me", "target": "rndmgmt" },
+    { "id": "e11", "source": "me", "target": "dad" },
+    { "id": "e12", "source": "me", "target": "phd" },
+    { "id": "e13", "source": "me", "target": "sogang", "label": "CICP 협력" },
+
+    { "id": "e14", "source": "ban", "target": "reconlabs", "label": "대표" },
+    { "id": "e15", "source": "vincent", "target": "reconlabs", "label": "소속" },
+    { "id": "e16", "source": "matt", "target": "reconlabs", "label": "소속" },
+    { "id": "e17", "source": "me", "target": "ban", "label": "주간 논의" },
+    { "id": "e18", "source": "me", "target": "vincent", "label": "실무 협업" },
+    { "id": "e19", "source": "me", "target": "matt", "label": "행정 협업" },
+
+    { "id": "e20", "source": "prektas", "target": "nmc", "label": "발주처" },
+    { "id": "e21", "source": "prektas", "target": "kimhi", "label": "의학 자문" },
+    { "id": "e22", "source": "prektas", "target": "nmcteam", "label": "검수 협의" },
+    { "id": "e23", "source": "nmcteam", "target": "nmc", "label": "소속" },
+    { "id": "e24", "source": "prektas", "target": "xr", "label": "XR 콘텐츠" },
+
+    { "id": "e25", "source": "scan2bim", "target": "etri", "label": "주관 기관" },
+    { "id": "e26", "source": "leejh", "target": "etri", "label": "소속" },
+    { "id": "e27", "source": "scan2bim", "target": "leejh", "label": "과제 관리" },
+
+    { "id": "e28", "source": "mcstrnd", "target": "karts", "label": "공동 수행" },
+
+    { "id": "e29", "source": "shortdrama", "target": "kocca", "label": "지원 사업" },
+    { "id": "e30", "source": "shortdrama", "target": "whynot", "label": "파트너" },
+    { "id": "e31", "source": "shortdrama", "target": "paffle", "label": "파트너" },
+    { "id": "e32", "source": "leekh", "target": "paffle", "label": "대표" },
+    { "id": "e33", "source": "limhj", "target": "whynot", "label": "이사" },
+
+    { "id": "e34", "source": "coworksync", "target": "aiagent", "label": "실험장" }
+  ]
+}

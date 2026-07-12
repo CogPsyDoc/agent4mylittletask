@@ -10,6 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findSessionFiles, parseSessionFile } from './lib/parser.js';
 import { MetaStore } from './lib/store.js';
+import { GraphStore } from './lib/graphfy.js';
 import {
   CHAT_MODEL,
   ContinuationStore,
@@ -37,6 +38,10 @@ if (!fs.existsSync(TRANSCRIPTS_DIR)) {
 
 const store = new MetaStore(path.join(__dirname, 'data', 'metadata.json'));
 const continuations = new ContinuationStore(path.join(__dirname, 'data', 'continuations.json'));
+const graphfy = new GraphStore(
+  path.join(__dirname, 'data', 'graphfy.json'),
+  path.join(__dirname, 'sample-data', 'graphfy-seed.json'),
+);
 
 // ---- 세션 캐시 ----
 // 파싱은 비용이 있으니 목록/본문을 캐시하고, TTL 지나면 다시 스캔.
@@ -255,6 +260,19 @@ app.get('/api/facets', async (req, res) => {
     tags: [...tags].sort(),
     projects: [...projects].sort(),
   });
+});
+
+// ---- Graphfy: 나에 대한 지식 그래프 ----
+app.get('/graphfy', (req, res) => res.sendFile(path.join(__dirname, 'public', 'graphfy.html')));
+
+app.get('/api/graphfy', (req, res) => res.json(graphfy.get()));
+
+app.put('/api/graphfy', (req, res) => {
+  try {
+    res.json(graphfy.set(req.body));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get('/api/health', (req, res) => res.json({ ok: true, dir: TRANSCRIPTS_DIR }));
