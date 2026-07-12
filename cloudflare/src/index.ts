@@ -27,6 +27,8 @@ import Anthropic from "@anthropic-ai/sdk";
 export interface Env extends Cloudflare.Env {
   ANTHROPIC_API_KEY?: string;
   SYNC_TOKEN?: string;
+  // 설정하면 뷰어(WebSocket/GET)도 이 토큰이 있어야 접근 가능
+  VIEW_TOKEN?: string;
 }
 
 // 트랜스크립트 메시지(lib/parser.js 출력 형식과 동일)
@@ -467,9 +469,29 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+// 뷰어 접근 제어.
+// VIEW_TOKEN 이 설정되어 있으면 /agents/* 전체(WebSocket 핸드셰이크 포함)에
+// ?token= 또는 Authorization: Bearer 토큰을 요구한다.
+// 예외: POST .../sync 는 자체적으로 SYNC_TOKEN 검사를 하므로 여기서 건너뛴다.
+function checkViewToken(request: Request, env: Env): Response | null {
+  if (!env.VIEW_TOKEN) return null;
+  const url = new URL(request.url);
+  if (request.method === "POST" && url.pathname.endsWith("/sync")) return null;
+
+  const got =
+    url.searchParams.get("token") ||
+    (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  if (got === env.VIEW_TOKEN) return null;
+  return json({ error: "VIEW_TOKEN이 필요해요" }, 401);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // /agents/cowork-agent/<room>[/...] → 에이전트로 라우팅, 그 외엔 정적 UI
+    if (new URL(request.url).pathname.startsWith("/agents/")) {
+      const denied = checkViewToken(request, env);
+      if (denied) return denied;
+    }
     return (await routeAgentRequest(request, env)) ?? env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;

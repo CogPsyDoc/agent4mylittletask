@@ -98,13 +98,28 @@
   const qs = new URLSearchParams(location.search);
   const room = (qs.get("room") || "main").replace(/[^\w-]/g, "") || "main";
   const $ = (id) => document.getElementById(id);
-  const state = { sessions: [], current: null, streaming: null, ws: null, retry: 0 };
+  const state = { sessions: [], current: null, streaming: null, ws: null, retry: 0, token: "" };
 
   $("room").textContent = "room: " + room;
 
-  function connect() {
+  // VIEW_TOKEN 이 설정된 워커라면 토큰을 받아 저장한다 (401 → 프롬프트)
+  async function ensureToken() {
+    let token = qs.get("token") || localStorage.getItem("cowork_view_token") || "";
+    for (;;) {
+      try {
+        const res = await fetch(`/agents/cowork-agent/${room}/health` + (token ? `?token=${encodeURIComponent(token)}` : ""));
+        if (res.status !== 401) { state.token = token; if (token) localStorage.setItem("cowork_view_token", token); return true; }
+      } catch { return true; } // 네트워크 오류는 WS 재시도 루프에 맡긴다
+      token = prompt("이 룸은 보호되어 있어요. 접속 토큰(VIEW_TOKEN)을 입력하세요:") || "";
+      if (!token) { toast("⚠️ 토큰이 없으면 접속할 수 없어요. 새로고침 후 다시 시도하세요."); return false; }
+    }
+  }
+
+  async function connect() {
+    if (!(await ensureToken())) return;
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${proto}//${location.host}/agents/cowork-agent/${room}`);
+    const tokenQs = state.token ? `?token=${encodeURIComponent(state.token)}` : "";
+    const ws = new WebSocket(`${proto}//${location.host}/agents/cowork-agent/${room}${tokenQs}`);
     state.ws = ws;
 
     ws.onopen = () => { $("dot").classList.add("on"); state.retry = 0; };

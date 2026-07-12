@@ -6,3 +6,7 @@ ANTHROPIC_API_KEY=
 
 # 설정하면 /sync 업로드에 Bearer 토큰 인증이 걸립니다 (강력 권장).
 SYNC_TOKEN=
+
+# 설정하면 뷰어(WebSocket/GET)도 토큰이 있어야 접근할 수 있습니다 (권장).
+# 브라우저에서 처음 접속할 때 물어보고 localStorage에 저장됩니다.
+VIEW_TOKEN=

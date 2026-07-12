@@ -29,6 +29,7 @@ cd cloudflare
 npm install
 npx wrangler login                      # Cloudflare 계정 연결
 npx wrangler secret put SYNC_TOKEN      # 업로드 인증 토큰 (강력 권장)
+npx wrangler secret put VIEW_TOKEN      # 뷰어 접속 토큰 (권장)
 npx wrangler secret put ANTHROPIC_API_KEY  # 채팅 기능 (선택)
 npm run deploy
 ```
@@ -93,7 +94,9 @@ node scripts/sync-up.js --url http://127.0.0.1:8787 --dir ../sample-data   # 데
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | secret | 설정 시 "이어서 대화" 활성화 |
 | `SYNC_TOKEN` | secret | 설정 시 `/sync` 업로드에 Bearer 인증 요구 |
+| `VIEW_TOKEN` | secret | 설정 시 뷰어(WebSocket/GET)에 토큰 요구 — 브라우저는 첫 접속 때 물어보고 저장 |
 | `CLAUDE_MODEL` | var (wrangler.jsonc) | 기본 `claude-opus-4-8` |
 
-> ⚠️ 뷰어(WebSocket/GET)는 별도 인증이 없습니다. 대화 내용이 민감하다면 Cloudflare Access
-> 등으로 워커 전체에 접근 제어를 걸거나, 룸 이름을 추측하기 어렵게 쓰세요.
+> 💡 `VIEW_TOKEN`은 `?token=...` 쿼리 또는 `Authorization: Bearer` 헤더로 전달합니다.
+> 대화 내용이 민감하다면 `VIEW_TOKEN`을 꼭 설정하고, 더 강한 보호가 필요하면
+> Cloudflare Access로 워커 전체에 접근 제어를 겹쳐 걸 수 있습니다.
