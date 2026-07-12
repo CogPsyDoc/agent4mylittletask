@@ -10,6 +10,7 @@ const TYPES = {
   interest: { label: '관심사', color: '#9085e9' },
   life: { label: '일상', color: '#e66767' },
 };
+const SURFACE = '#0f1115';
 
 const $ = (sel) => document.querySelector(sel);
 const canvas = $('#canvas');
@@ -21,12 +22,17 @@ const state = {
   selected: null, // node id
   hovered: null,
   linking: false, // 연결 추가 모드
+  localId: null, // 로컬 그래프(이웃만 보기) 중심 노드
+  localSet: null,
   search: '',
   typeOff: new Set(),
-  view: { x: 0, y: 0, k: 1 }, // pan/zoom
+  // 뷰: 현재값(x,y,k) + 목표값(tx,ty,tk) — 매 프레임 보간해 부드럽게 이동
+  view: { x: 0, y: 0, k: 1, tx: 0, ty: 0, tk: 1 },
+  dimA: 0, // 포커스 시 주변 어둡게 — 이징된 강도(0~1)
   alpha: 0, // 시뮬레이션 온도
   dragNode: null,
   saveTimer: null,
+  mouseWorld: null,
 };
 
 // ---------- 데이터 로드/저장 ----------
@@ -45,12 +51,12 @@ async function load() {
   const fresh = initPositions();
   if (fresh) {
     state.alpha = 1;
-    for (let i = 0; i < 400 && state.alpha > 0.005; i++) tick();
+    for (let i = 0; i < 500 && state.alpha > 0.005; i++) tick();
   }
   buildLegend();
   applyMeta();
-  fitView();
-  reheat(0.2);
+  fitView(false);
+  reheat(0.15);
 }
 
 function applyMeta() {
@@ -102,8 +108,8 @@ function degree(id) {
 }
 
 function radius(n) {
-  if (n.type === 'self') return 26;
-  return 12 + Math.min(10, Math.sqrt(degree(n.id)) * 3);
+  if (n.type === 'self') return 27;
+  return 11 + Math.min(11, Math.sqrt(degree(n.id)) * 3.2);
 }
 
 function neighbors(id) {
@@ -115,8 +121,20 @@ function neighbors(id) {
   return set;
 }
 
+function updateLocalSet() {
+  if (!state.localId || !nodeById(state.localId)) {
+    state.localId = null;
+    state.localSet = null;
+    return;
+  }
+  const set = neighbors(state.localId);
+  set.add(state.localId);
+  state.localSet = set;
+}
+
 function nodeVisible(n) {
   if (state.typeOff.has(n.type)) return false;
+  if (state.localSet && !state.localSet.has(n.id)) return false;
   return true;
 }
 
@@ -141,6 +159,7 @@ function initPositions() {
     }
     n.vx = 0;
     n.vy = 0;
+    n._hs = 1; // 호버 스케일 (이징)
   });
   return fresh;
 }
@@ -151,9 +170,11 @@ function reheat(alpha = 0.6) {
 
 function tick() {
   const nodes = state.graph.nodes.filter(nodeVisible);
-  const edges = state.graph.edges.filter(
-    (e) => nodeById(e.source) && nodeById(e.target) && nodeVisible(nodeById(e.source)) && nodeVisible(nodeById(e.target)),
-  );
+  const edges = state.graph.edges.filter((e) => {
+    const s = nodeById(e.source);
+    const t = nodeById(e.target);
+    return s && t && nodeVisible(s) && nodeVisible(t);
+  });
   const a = state.alpha;
   if (a < 0.005) return;
 
@@ -174,7 +195,7 @@ function tick() {
     }
   }
 
-  // 스프링 (엣지)
+  // 스프링 (엣지) — 가중치가 높을수록 살짝 더 당김
   for (const e of edges) {
     const s = nodeById(e.source);
     const t = nodeById(e.target);
@@ -182,7 +203,8 @@ function tick() {
     let dx = t.x - s.x;
     let dy = t.y - s.y;
     const d = Math.max(1, Math.hypot(dx, dy));
-    const f = Math.max(-3, Math.min(3, (d - rest) * 0.03 * a));
+    const k = 0.03 * (1 + 0.15 * ((e.w || 1) - 1));
+    const f = Math.max(-3, Math.min(3, (d - rest) * k * a));
     dx = (dx / d) * f; dy = (dy / d) * f;
     s.vx += dx; s.vy += dy;
     t.vx -= dx; t.vy -= dy;
@@ -199,6 +221,24 @@ function tick() {
     if (v > 12) { n.vx = (n.vx / v) * 12; n.vy = (n.vy / v) * 12; }
     n.x += n.vx;
     n.y += n.vy;
+  }
+
+  // 겹침 방지 — 원끼리 최소 간격 유지
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const p = nodes[i];
+      const q = nodes[j];
+      const min = radius(p) + radius(q) + 8;
+      let dx = q.x - p.x;
+      let dy = q.y - p.y;
+      const d = Math.max(0.1, Math.hypot(dx, dy));
+      if (d < min) {
+        const push = (min - d) / 2;
+        dx /= d; dy /= d;
+        if (state.dragNode !== p) { p.x -= dx * push; p.y -= dy * push; }
+        if (state.dragNode !== q) { q.x += dx * push; q.y += dy * push; }
+      }
+    }
   }
 
   state.alpha *= 0.99;
@@ -219,13 +259,52 @@ function toWorld(px, py) {
   return { x: (px - canvas.clientWidth / 2) / k - x, y: (py - canvas.clientHeight / 2) / k - y };
 }
 
+function hexA(hex, a) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function edgeCurve(s, t) {
+  // 살짝 휘어진 엣지 — 수직 방향으로 거리의 8%만큼 볼록
+  const mx = (s.x + t.x) / 2;
+  const my = (s.y + t.y) / 2;
+  const dx = t.x - s.x;
+  const dy = t.y - s.y;
+  const d = Math.max(1, Math.hypot(dx, dy));
+  const off = d * 0.08;
+  const cx = mx - (dy / d) * off;
+  const cy = my + (dx / d) * off;
+  // 곡선 중점 (t=0.5)
+  const px = 0.25 * s.x + 0.5 * cx + 0.25 * t.x;
+  const py = 0.25 * s.y + 0.5 * cy + 0.25 * t.y;
+  return { cx, cy, px, py };
+}
+
 function draw() {
-  const { clientWidth: w, clientHeight: h } = canvas;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  const view = state.view;
+
+  // 뷰 보간 (부드러운 팬/줌/센터링)
+  view.x += (view.tx - view.x) * 0.14;
+  view.y += (view.ty - view.y) * 0.14;
+  view.k += (view.tk - view.k) * 0.14;
+
   ctx.clearRect(0, 0, w, h);
+
+  // 은은한 배경 비네트
+  const bgGrad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+  bgGrad.addColorStop(0, '#141821');
+  bgGrad.addColorStop(1, SURFACE);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, w, h);
+
   ctx.save();
   ctx.translate(w / 2, h / 2);
-  ctx.scale(state.view.k, state.view.k);
-  ctx.translate(state.view.x, state.view.y);
+  ctx.scale(view.k, view.k);
+  ctx.translate(view.x, view.y);
 
   const sel = state.selected;
   const hov = state.hovered;
@@ -233,41 +312,50 @@ function draw() {
   const hood = focus ? neighbors(focus) : null;
   const searching = !!state.search;
 
+  // 포커스 디밍 강도 이징
+  state.dimA += ((focus || searching ? 1 : 0) - state.dimA) * 0.15;
+  const dimA = state.dimA;
+
   const visible = (n) => n && nodeVisible(n);
-  const dimmed = (n) => {
+  const isDim = (n) => {
     if (searching && !nodeMatches(n)) return true;
     if (focus && n.id !== focus && !hood.has(n.id)) return true;
     return false;
   };
+  const nodeAlpha = (n) => (isDim(n) ? 1 - 0.85 * dimA : 1);
 
-  // 엣지
+  // 라벨은 확대할수록 선명해짐 (Obsidian 스타일)
+  const zoomLabel = Math.max(0, Math.min(1, (view.k - 0.42) / 0.35));
+
+  // ---- 엣지 ----
   for (const e of state.graph.edges) {
     const s = nodeById(e.source);
     const t = nodeById(e.target);
     if (!visible(s) || !visible(t)) continue;
     const active = focus && (e.source === focus || e.target === focus);
-    const dim = dimmed(s) || dimmed(t);
-    ctx.strokeStyle = active ? 'rgba(224,120,90,0.75)' : dim ? 'rgba(42,49,60,0.35)' : 'rgba(96,108,126,0.45)';
-    ctx.lineWidth = (active ? 2 : 1.5) / state.view.k;
+    const a = Math.min(nodeAlpha(s), nodeAlpha(t));
+    const { cx, cy, px, py } = edgeCurve(s, t);
+    const wgt = e.w || 1;
+
+    ctx.strokeStyle = active ? hexA('#e0785a', 0.35 + 0.45 * a) : `rgba(96,108,126,${0.38 * a})`;
+    ctx.lineWidth = ((active ? 1.1 : 0.7) + wgt * 0.55) / view.k;
     ctx.beginPath();
     ctx.moveTo(s.x, s.y);
-    ctx.lineTo(t.x, t.y);
+    ctx.quadraticCurveTo(cx, cy, t.x, t.y);
     ctx.stroke();
 
     // 엣지 라벨 (확대 시 또는 포커스 시)
-    if (e.label && (state.view.k > 0.85 || active) && !dim) {
-      const mx = (s.x + t.x) / 2;
-      const my = (s.y + t.y) / 2;
-      ctx.font = `${11 / state.view.k}px sans-serif`;
-      ctx.fillStyle = active ? '#e0785a' : '#8b93a1';
+    const la = active ? 1 : zoomLabel;
+    if (e.label && la > 0.05 && a > 0.5) {
+      ctx.font = `${11 / view.k}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const pad = 3 / state.view.k;
+      const pad = 3 / view.k;
       const tw = ctx.measureText(e.label).width;
-      ctx.fillStyle = 'rgba(15,17,21,0.75)';
-      ctx.fillRect(mx - tw / 2 - pad, my - 7 / state.view.k, tw + pad * 2, 14 / state.view.k);
-      ctx.fillStyle = active ? '#e0785a' : '#8b93a1';
-      ctx.fillText(e.label, mx, my);
+      ctx.fillStyle = `rgba(15,17,21,${0.75 * la})`;
+      ctx.fillRect(px - tw / 2 - pad, py - 7 / view.k, tw + pad * 2, 14 / view.k);
+      ctx.fillStyle = active ? hexA('#e0785a', la) : `rgba(139,147,161,${la})`;
+      ctx.fillText(e.label, px, py);
     }
   }
 
@@ -276,8 +364,8 @@ function draw() {
     const s = nodeById(sel);
     if (s) {
       ctx.strokeStyle = 'rgba(224,120,90,0.9)';
-      ctx.setLineDash([6 / state.view.k, 5 / state.view.k]);
-      ctx.lineWidth = 2 / state.view.k;
+      ctx.setLineDash([6 / view.k, 5 / view.k]);
+      ctx.lineWidth = 2 / view.k;
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(state.mouseWorld.x, state.mouseWorld.y);
@@ -286,50 +374,75 @@ function draw() {
     }
   }
 
-  // 노드
+  // ---- 노드 (라벨은 겹침 방지를 위해 별도 패스로) ----
+  const labelPass = [];
   for (const n of state.graph.nodes) {
     if (!visible(n)) continue;
-    const r = radius(n);
-    const dim = dimmed(n);
     const color = TYPES[n.type]?.color || '#8b93a1';
+    const a = nodeAlpha(n);
+    const hot = n.id === sel || n.id === hov;
 
-    ctx.globalAlpha = dim ? 0.18 : 1;
+    // 호버 스케일 이징
+    n._hs = (n._hs || 1) + ((hot ? 1.16 : 1) - (n._hs || 1)) * 0.2;
+    const r = radius(n) * n._hs;
 
-    // 채움 + 서피스 링(2px)
+    ctx.globalAlpha = a;
+
+    // 글로우 (halo)
+    const glowR = r * (hot ? 2.6 : 2.1);
+    const glow = ctx.createRadialGradient(n.x, n.y, r * 0.6, n.x, n.y, glowR);
+    glow.addColorStop(0, hexA(color, hot ? 0.4 : 0.22));
+    glow.addColorStop(1, hexA(color, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 본체 + 서피스 링(2px)
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.lineWidth = 2 / state.view.k;
-    ctx.strokeStyle = '#0f1115';
+    ctx.lineWidth = 2 / view.k;
+    ctx.strokeStyle = SURFACE;
     ctx.stroke();
 
-    if (n.id === sel || n.id === hov) {
+    if (n.id === sel) {
       ctx.beginPath();
-      ctx.arc(n.x, n.y, r + 3.5 / state.view.k, 0, Math.PI * 2);
-      ctx.lineWidth = 2 / state.view.k;
-      ctx.strokeStyle = n.id === sel ? '#e0785a' : 'rgba(224,120,90,0.55)';
+      ctx.arc(n.x, n.y, r + 4 / view.k, 0, Math.PI * 2);
+      ctx.lineWidth = 2 / view.k;
+      ctx.strokeStyle = '#e0785a';
       ctx.stroke();
     }
 
-    // 이모지 & 라벨
+    // 이모지
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (n.emoji) {
-      ctx.font = `${Math.max(11, r * 1.05)}px sans-serif`;
+      ctx.font = `${Math.max(11, r * 1.02)}px sans-serif`;
       ctx.fillText(n.emoji, n.x, n.y + 1);
     }
-    const fs = n.type === 'self' ? 14 : 12;
-    ctx.font = `${n.type === 'self' ? 650 : 550} ${fs}px -apple-system, "Noto Sans KR", sans-serif`;
-    const ly = n.y + r + 4;
-    ctx.fillStyle = 'rgba(15,17,21,0.7)';
-    const tw = ctx.measureText(n.label).width;
-    ctx.fillRect(n.x - tw / 2 - 3, ly, tw + 6, fs + 5);
-    ctx.fillStyle = dim ? '#8b93a1' : '#e6e9ef';
-    ctx.textBaseline = 'top';
-    ctx.fillText(n.label, n.x, ly + 2);
+
+    // 라벨 — 나/선택/호버/이웃은 항상, 나머지는 줌에 따라
+    let la = zoomLabel;
+    if (n.type === 'self' || hot || (focus && hood.has(n.id))) la = 1;
+    if (la > 0.03) labelPass.push({ n, r, la: la * a });
 
     ctx.globalAlpha = 1;
+  }
+
+  // 라벨 패스 — 모든 원 위에 그려서 가려지지 않게
+  for (const { n, r, la } of labelPass) {
+    const fs = n.type === 'self' ? 14.5 : 12;
+    ctx.font = `${n.type === 'self' ? 650 : 550} ${fs}px -apple-system, "Noto Sans KR", sans-serif`;
+    ctx.textAlign = 'center';
+    const ly = n.y + r + 4;
+    const tw = ctx.measureText(n.label).width;
+    ctx.fillStyle = `rgba(15,17,21,${0.7 * la})`;
+    ctx.fillRect(n.x - tw / 2 - 3, ly, tw + 6, fs + 5);
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = isDim(n) ? `rgba(139,147,161,${la})` : `rgba(230,233,239,${la})`;
+    ctx.fillText(n.label, n.x, ly + 2);
   }
 
   ctx.restore();
@@ -341,7 +454,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-function fitView() {
+function fitView(animate = true) {
   const nodes = state.graph.nodes.filter(nodeVisible);
   if (!nodes.length) return;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -350,18 +463,27 @@ function fitView() {
     minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
   }
   const w = canvas.clientWidth, h = canvas.clientHeight;
-  const gw = Math.max(100, maxX - minX + 220);
-  const gh = Math.max(100, maxY - minY + 220);
-  state.view.k = Math.min(1.4, Math.min(w / gw, h / gh));
-  state.view.x = -(minX + maxX) / 2;
-  state.view.y = -(minY + maxY) / 2;
+  const gw = Math.max(100, maxX - minX + 240);
+  const gh = Math.max(100, maxY - minY + 240);
+  const v = state.view;
+  v.tk = Math.min(1.4, Math.min(w / gw, h / gh));
+  v.tx = -(minX + maxX) / 2;
+  v.ty = -(minY + maxY) / 2;
+  if (!animate) { v.x = v.tx; v.y = v.ty; v.k = v.tk; }
+}
+
+function centerOn(id, zoom = null) {
+  const n = nodeById(id);
+  if (!n) return;
+  state.view.tx = -n.x;
+  state.view.ty = -n.y;
+  if (zoom) state.view.tk = zoom;
 }
 
 // ---------- 포인터 인터랙션 ----------
 
 function nodeAt(px, py) {
   const { x, y } = toWorld(px, py);
-  // 위에 그려진(뒤에 있는) 노드 우선
   for (let i = state.graph.nodes.length - 1; i >= 0; i--) {
     const n = state.graph.nodes[i];
     if (!nodeVisible(n)) continue;
@@ -392,7 +514,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   const n = nodeAt(ev.offsetX, ev.offsetY);
   if (n && !state.linking) {
     state.dragNode = n;
-    reheat(0.3);
+    reheat(0.25);
   } else {
     panStart = { px: ev.offsetX, py: ev.offsetY, vx: state.view.x, vy: state.view.y };
     canvas.classList.add('dragging');
@@ -412,7 +534,9 @@ canvas.addEventListener('pointermove', (ev) => {
   if (pointers.size === 2 && pinchStart) {
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    state.view.k = Math.min(3, Math.max(0.15, (pinchStart.k * d) / pinchStart.d));
+    const k = Math.min(3, Math.max(0.15, (pinchStart.k * d) / pinchStart.d));
+    state.view.k = k;
+    state.view.tk = k;
     return;
   }
 
@@ -420,12 +544,15 @@ canvas.addEventListener('pointermove', (ev) => {
     const w = toWorld(ev.offsetX, ev.offsetY);
     state.dragNode.x = w.x;
     state.dragNode.y = w.y;
-    reheat(0.15);
+    reheat(0.12);
     return;
   }
   if (panStart) {
-    state.view.x = panStart.vx + (ev.offsetX - panStart.px) / state.view.k;
-    state.view.y = panStart.vy + (ev.offsetY - panStart.py) / state.view.k;
+    const v = state.view;
+    v.x = panStart.vx + (ev.offsetX - panStart.px) / v.k;
+    v.y = panStart.vy + (ev.offsetY - panStart.py) / v.k;
+    v.tx = v.x;
+    v.ty = v.y;
     return;
   }
 
@@ -440,12 +567,11 @@ canvas.addEventListener('pointerup', (ev) => {
   canvas.classList.remove('dragging');
 
   const wasDragging = !!state.dragNode;
-  const draggedNode = state.dragNode;
   state.dragNode = null;
   panStart = null;
 
   if (moved) {
-    if (wasDragging && draggedNode) scheduleSave(); // 위치 저장
+    if (wasDragging) scheduleSave(); // 위치 저장
     return;
   }
 
@@ -462,10 +588,18 @@ canvas.addEventListener('pointerup', (ev) => {
   }
 });
 
+// 휠 줌 — 커서 위치 기준
 canvas.addEventListener('wheel', (ev) => {
   ev.preventDefault();
-  const factor = Math.exp(-ev.deltaY * 0.0015);
-  state.view.k = Math.min(3, Math.max(0.15, state.view.k * factor));
+  const v = state.view;
+  const w0 = toWorld(ev.offsetX, ev.offsetY);
+  const k2 = Math.min(3, Math.max(0.15, v.k * Math.exp(-ev.deltaY * 0.0015)));
+  v.k = k2;
+  v.tk = k2;
+  v.x = (ev.offsetX - canvas.clientWidth / 2) / k2 - w0.x;
+  v.y = (ev.offsetY - canvas.clientHeight / 2) / k2 - w0.y;
+  v.tx = v.x;
+  v.ty = v.y;
 }, { passive: false });
 
 // ---------- 범례/필터 ----------
@@ -477,7 +611,7 @@ function buildLegend() {
     const count = state.graph.nodes.filter((n) => n.type === type).length;
     if (!count && type !== 'self') continue;
     const chip = document.createElement('button');
-    chip.className = 'chip';
+    chip.className = 'chip' + (state.typeOff.has(type) ? ' off' : '');
     chip.innerHTML = `<span class="dot" style="background:${info.color}"></span>${info.label} <span style="color:var(--muted)">${count}</span>`;
     chip.onclick = () => {
       if (state.typeOff.has(type)) state.typeOff.delete(type);
@@ -507,6 +641,7 @@ function selectNode(id) {
   $('#panelType').innerHTML = typeOptions(n.type);
   $('#panelEmojiInput').value = n.emoji || '';
   $('#panelDesc').value = n.desc || '';
+  updateLocalBtn();
   renderLinks(n);
   $('#hint').classList.add('hide');
 }
@@ -532,7 +667,7 @@ function renderLinks(n) {
       <button class="unlink" title="연결 해제">✕</button>`;
     li.querySelector('.to').onclick = () => {
       selectNode(otherId);
-      centerOn(otherId);
+      centerOn(otherId, Math.max(state.view.tk, 0.9));
     };
     li.querySelector('.rel').onchange = (ev) => {
       e.label = ev.target.value.trim();
@@ -541,19 +676,11 @@ function renderLinks(n) {
     li.querySelector('.unlink').onclick = () => {
       state.graph.edges = state.graph.edges.filter((x) => x !== e);
       renderLinks(n);
-      buildLegend();
       reheat(0.3);
       scheduleSave();
     };
     ul.appendChild(li);
   }
-}
-
-function centerOn(id) {
-  const n = nodeById(id);
-  if (!n) return;
-  state.view.x = -n.x;
-  state.view.y = -n.y;
 }
 
 function hidePanel() {
@@ -605,10 +732,33 @@ $('#btnDeleteNode').onclick = () => {
   state.graph.nodes = state.graph.nodes.filter((x) => x.id !== n.id);
   state.graph.edges = state.graph.edges.filter((e) => e.source !== n.id && e.target !== n.id);
   state.selected = null;
+  if (state.localId === n.id) { state.localId = null; state.localSet = null; }
   hidePanel();
   buildLegend();
   reheat(0.4);
   scheduleSave();
+};
+
+// ---------- 로컬 그래프 (이웃만 보기) ----------
+
+function updateLocalBtn() {
+  const btn = $('#btnLocal');
+  const on = state.localId && state.localId === state.selected;
+  btn.textContent = on ? '◉ 전체 그래프 보기' : '◎ 로컬 그래프';
+  btn.classList.toggle('accent', !!on);
+}
+
+$('#btnLocal').onclick = () => {
+  if (state.localId === state.selected) {
+    state.localId = null;
+    state.localSet = null;
+  } else {
+    state.localId = state.selected;
+    updateLocalSet();
+  }
+  updateLocalBtn();
+  reheat(0.5);
+  setTimeout(() => fitView(true), 250);
 };
 
 // ---------- 연결 추가 ----------
@@ -634,7 +784,8 @@ function addEdge(sourceId, targetId) {
   );
   if (dup) return;
   const id = 'e' + (Date.now() % 1e7).toString(36) + Math.floor(Math.random() * 100);
-  state.graph.edges.push({ id, source: sourceId, target: targetId, label: '' });
+  state.graph.edges.push({ id, source: sourceId, target: targetId, label: '', w: 1 });
+  updateLocalSet();
   renderLinks(nodeById(sourceId));
   reheat(0.3);
   scheduleSave();
@@ -647,7 +798,7 @@ $('#btnLink').onclick = () => setLinking(!state.linking);
 $('#btnAddNode').onclick = () => {
   const id = 'n' + Date.now().toString(36);
   const c = toWorld(canvas.clientWidth / 2, canvas.clientHeight / 2);
-  const node = { id, type: 'interest', label: '새 노드', emoji: '✨', desc: '', x: c.x + 30, y: c.y + 30, vx: 0, vy: 0 };
+  const node = { id, type: 'interest', label: '새 노드', emoji: '✨', desc: '', x: c.x + 30, y: c.y + 30, vx: 0, vy: 0, _hs: 1 };
   state.graph.nodes.push(node);
   buildLegend();
   selectNode(id);
@@ -657,7 +808,7 @@ $('#btnAddNode').onclick = () => {
   $('#panelLabel').select();
 };
 
-$('#btnFit').onclick = fitView;
+$('#btnFit').onclick = () => fitView(true);
 
 $('#gfySearch').addEventListener('input', (ev) => {
   state.search = ev.target.value.trim().toLowerCase();
@@ -681,11 +832,13 @@ $('#importFile').addEventListener('change', async (ev) => {
     if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) throw new Error('nodes/edges가 없어요.');
     state.graph = graph;
     state.selected = null;
+    state.localId = null;
+    state.localSet = null;
     hidePanel();
     initPositions();
     buildLegend();
     applyMeta();
-    fitView();
+    fitView(true);
     reheat(1);
     scheduleSave();
   } catch (err) {
@@ -703,6 +856,6 @@ window.addEventListener('resize', resize);
 resize();
 load().then(() => {
   resize();
-  fitView();
+  fitView(false);
 });
 requestAnimationFrame(loop);
