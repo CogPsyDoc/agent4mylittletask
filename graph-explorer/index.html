@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vault Galaxy — fly your Obsidian graph</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌌</text></svg>" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="fade"></div>
+
+  <div class="ui" id="ui">
+    <div id="crosshair"><div class="dot"></div><div class="ring"></div></div>
+
+    <header id="hud-top">
+      <div id="brand">
+        <h1>VAULT GALAXY</h1>
+        <div id="stats"></div>
+      </div>
+      <div id="mode-badge"></div>
+    </header>
+
+    <aside id="panel">
+      <section>
+        <label class="row">Theme
+          <select id="theme-select"></select>
+        </label>
+        <label class="row">Avatar
+          <select id="avatar-select"></select>
+        </label>
+        <label class="row">Interior avatar
+          <select id="interior-avatar-select"></select>
+        </label>
+      </section>
+      <section>
+        <label class="row check"><input type="checkbox" id="toggle-hubs" checked />
+          Synthesized hubs</label>
+        <label class="row check"><input type="checkbox" id="toggle-attachments" />
+          Attachments</label>
+      </section>
+      <section>
+        <label class="row slider">Speed
+          <input type="range" id="speed" min="10" max="220" step="1" value="40" />
+        </label>
+        <label class="row slider">Spread
+          <input type="range" id="spread" min="0.4" max="2.6" step="0.05" value="1" />
+        </label>
+      </section>
+    </aside>
+
+    <article id="note-panel" hidden>
+      <header>
+        <div>
+          <h2 id="note-title"></h2>
+          <span id="note-meta"></span>
+        </div>
+        <button id="note-close" title="Close">×</button>
+      </header>
+      <div id="note-body"></div>
+      <footer id="note-actions"></footer>
+    </article>
+
+    <footer id="hints">
+      <span><b>Click</b> capture mouse</span>
+      <span><b>WASD</b> thrust/strafe</span>
+      <span><b>R/F</b> rise/descend</span>
+      <span><b>Space</b> hyperdrive</span>
+      <span><b>E</b> dive in / out</span>
+      <span><b>Z</b> zen mode</span>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

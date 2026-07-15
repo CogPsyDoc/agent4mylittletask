@@ -1,0 +1,19 @@
+{
+  "name": "obsidian-galaxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fly through your Obsidian vault as an interactive 3D graph",
+  "scripts": {
+    "vault": "node tools/build-vault.mjs",
+    "dev": "npm run vault && vite",
+    "build": "npm run vault && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}
