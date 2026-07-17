@@ -73,6 +73,21 @@
   #dropzone .big { font-size: 1.05rem; color: var(--text); margin-bottom: 6px; }
   #dropzone.hidden { display: none; }
 
+  /* ── 안내 배너 ── */
+  #grayWarn {
+    display: none;
+    background: rgba(232, 182, 76, 0.10);
+    border: 1px solid rgba(232, 182, 76, 0.45);
+    color: #f2d488;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+  #grayWarn.visible { display: block; }
+  #grayWarn b { color: var(--accent); }
+
   /* ── 뷰 전환 탭 ── */
   .view-tabs { display: none; gap: 6px; margin-bottom: 14px; }
   .view-tabs.visible { display: flex; }
@@ -208,8 +223,9 @@
 
 <header>
   <h1>흑백 <span>컬러필터</span> 비교기</h1>
-  <p>흑백 사진에서 레드·오렌지·옐로우·그린·블루 필터가 만드는 톤 차이를 한눈에 비교해 보세요.
-  필터와 같은 색은 밝아지고, 보색은 어두워집니다. 모든 처리는 브라우저 안에서만 이루어집니다.</p>
+  <p><b>컬러 사진</b>을 넣으면 레드·오렌지·옐로우·그린·블루 필터를 끼우고 흑백 필름으로 찍었을 때의
+  톤 차이를 한눈에 비교해 줍니다. 필터와 같은 색은 밝아지고 보색은 어두워집니다.
+  (이미 흑백인 사진은 색 정보가 없어 필터 차이가 나타나지 않아요.) 모든 처리는 브라우저 안에서만 이루어집니다.</p>
 </header>
 
 <main>
@@ -228,6 +244,12 @@
   <div id="dropzone">
     <div class="big">사진을 여기로 드래그하거나 클릭해서 선택하세요</div>
     <div>또는 위의 샘플 사진으로 바로 시작할 수 있어요</div>
+  </div>
+
+  <div id="grayWarn">
+    올린 사진에 <b>색 정보가 거의 없어서</b>(이미 흑백에 가까움) 필터별 차이가 나타나지 않습니다.
+    컬러필터는 원래 색이 있는 장면에서만 톤을 바꿀 수 있어요 —
+    <b>파란 하늘·녹색 나뭇잎·붉은 물체가 있는 컬러 사진</b>으로 시도해 보세요.
   </div>
 
   <div class="view-tabs" id="viewTabs">
@@ -371,11 +393,30 @@ function processAll() {
   }
 }
 
+/* 소스의 평균 채도(chroma)를 측정한다.
+   이미 흑백/저채도 사진은 R≈G≈B라 필터를 바꿔도 결과가 같으므로,
+   이 값이 낮으면 사용자에게 안내 배너를 띄운다. */
+function measureColorfulness(source) {
+  const ctx = source.getContext("2d");
+  const d = ctx.getImageData(0, 0, source.width, source.height).data;
+  const step = Math.max(4, Math.floor(d.length / 4 / 20000) * 4); // 최대 ~2만 픽셀 표본
+  let sum = 0, count = 0;
+  for (let i = 0; i < d.length; i += step) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    sum += Math.max(r, g, b) - Math.min(r, g, b); // 픽셀 채도
+    count++;
+  }
+  return count ? sum / count : 0;
+}
+
 /* ── 렌더링 ── */
 
 function render() {
   dropzone.classList.add("hidden");
   viewTabs.classList.add("visible");
+  // 평균 채도가 8 미만이면 사실상 흑백 → 필터 차이가 없음을 안내
+  const colorful = measureColorfulness(state.source);
+  $("#grayWarn").classList.toggle("visible", colorful < 8);
   renderGrid();
   renderChips();
   renderSingle();
