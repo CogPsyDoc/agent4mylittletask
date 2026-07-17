@@ -1,0 +1,18 @@
+---
+import Base from '../layouts/Base.astro';
+import data from '../data/site.json';
+---
+<Base title="Journal" active="journal">
+  <h1 class="section-title">Journal</h1>
+  <div class="journal-list">
+    {data.journal.map((j) => (
+      <div class="journal-item">
+        <span class="date">{j.date}</span>
+        <div class="body">
+          <span class="title">{j.title}</span>
+          <span class="line">{j.line}</span>
+        </div>
+      </div>
+    ))}
+  </div>
+</Base>

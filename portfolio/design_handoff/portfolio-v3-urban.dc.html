@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style data-omelette-injected>html,body{background:transparent}</style><script data-omelette-injected>(()=>{{const W=new URLSearchParams(location.search).get("theme");if(W==="light"||W==="dark"){document.documentElement.dataset.theme=W}}{const W=()=>{try{if(document.querySelector('meta[name="color-scheme"]'))return;const V=getComputedStyle(document.documentElement).getPropertyValue("color-scheme").trim();if(V&&V!=="normal")return;const z=(j)=>{if(!j)return null;const H=getComputedStyle(j).backgroundColor.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/);if(!H)return null;const F=H[4]==null?1:parseFloat(H[4])/(H[4].endsWith("%")?100:1);if(F<0.99)return null;return[+H[1],+H[2],+H[3]]};const G=z(document.body)||z(document.documentElement);if(!G)return;const K=(j)=>{const H=j/255;return H<=0.04045?H/12.92:((H+0.055)/1.055)**2.4};const D=0.2126*K(G[0])+0.7152*K(G[1])+0.0722*K(G[2]);document.documentElement.style.setProperty("color-scheme",D<0.4?"dark":"light")}catch{}};if(document.readyState==="complete")W();else window.addEventListener("load",W)}var b=["https://claude.ai","https://preview.claude.ai","https://1c816598-7df1-434a-a6d3-9d6076f81b58.claudeusercontent.com"];var p=true;var O=30000;var n=3000;document.addEventListener("DOMContentLoaded",()=>{const W=window.Babel;const V="om-src-id";if(W&&W.registerPlugin&&!(W.availablePlugins&&W.availablePlugins[V])){W.registerPlugin(V,({types:D})=>({visitor:{JSXOpeningElement(j,H){const F=j.node;if(F.name&&F.name.type==="JSXMemberExpression")return;for(let Q=0;Q<F.attributes.length;Q++){const $=F.attributes[Q];if($.type==="JSXAttribute"&&$.name&&$.name.name==="data-om-id")return}const P=H.file&&H.file.opts&&H.file.opts.filename||"?";const R=F.loc&&F.loc.start;const J=`jsx:${P}:${F.start??0}:${R?R.line:0}:${R?R.column+1:0}`;F.attributes.push(D.jsxAttribute(D.jsxIdentifier("data-om-id"),D.stringLiteral(J)))}}}))}const z="om-text-extract";let G=false;if(p&&W&&W.registerPlugin&&!(W.availablePlugins&&W.availablePlugins[z])){const D=window.React;if(D&&D.useSyncExternalStore&&D.createElement){G=true;const j={};const H=new Set;let F=0;window.__omTextO=j;window.__omTextSet=(J)=>{for(const Q in J){const $=J[Q];if($==null)delete j[Q];else j[Q]=$}F++;H.forEach((Q)=>Q())};const P=(J)=>{H.add(J);return()=>H.delete(J)};const R=()=>F;window.__OmT=function J(Q){D.useSyncExternalStore(P,R,R);return D.createElement("span",{"data-om-text":Q.i,className:"__om-t"},Q.i in j?j[Q.i]:Q.children)};W.registerPlugin(z,({types:J})=>{const Q={style:1,script:1,noscript:1,textarea:1,title:1,option:1,text:1,tspan:1,textPath:1};const $={placeholder:1,alt:1,title:1,label:1,"aria-label":1,"aria-description":1,"aria-placeholder":1};const Y=(q,M)=>J.logicalExpression("??",J.memberExpression(J.logicalExpression("||",J.memberExpression(J.identifier("window"),J.identifier("__omTextO")),J.objectExpression([])),J.stringLiteral(q),true),M);const Z=(q)=>q.file&&q.file.opts&&q.file.opts.filename||"?";const B=(q)=>q.file&&q.file.code||"";const U=(q,M)=>{const L=(X)=>X&&X.start!=null&&X.end!=null&&(X.type==="StringLiteral"||X.type==="TemplateLiteral"&&X.expressions.length===0)?[X.start,X.end]:null;const N=L(M);if(N)return N;if(M&&M.type==="Identifier"){const X=q.scope.getBinding(M.name);if(X&&X.constant&&X.path.node.type==="VariableDeclarator"){return L(X.path.node.init)}}return null};const x=(q,M,L)=>{const N=q.node;let X=false;const f=(w,A)=>{X=true;return J.jsxElement(J.jsxOpeningElement(J.jsxIdentifier("__OmT"),[J.jsxAttribute(J.jsxIdentifier("i"),J.stringLiteral(w))],false),J.jsxClosingElement(J.jsxIdentifier("__OmT")),[A],false)};const C=N.children.map((w)=>{if(w.type==="JSXText"){if(w.start==null||w.end==null)return w;const A=L.slice(w.start,w.end);const k=A.length-A.trimStart().length;const u=A.length-A.trimEnd().length;if(k+u>=A.length)return w;return f(`txt:${M}:${w.start+k}:${w.end-u}`,w)}if(w.type==="JSXExpressionContainer"){const A=U(q,w.expression);if(A)return f(`str:${M}:${A[0]}:${A[1]}`,w)}return w});if(X)N.children=C};return{visitor:{JSXOpeningElement(q,M){const L=q.node;const N=Z(M);const X={};for(let f=0;f<L.attributes.length;f++){const C=L.attributes[f];if(C.type!=="JSXAttribute"||!C.name)continue;const w=C.name.name;if(!$[w])continue;if(!C.value||C.value.type!=="StringLiteral")continue;if(C.value.start==null||C.value.end==null)continue;const A=`txt:${N}:${C.value.start}:${C.value.end}`;X[w]=A;C.value=J.jsxExpressionContainer(Y(A,J.stringLiteral(C.value.value)))}if(Object.keys(X).length){L.attributes.push(J.jsxAttribute(J.jsxIdentifier("data-om-text-attrs"),J.stringLiteral(JSON.stringify(X))))}},JSXElement(q,M){const L=q.node.openingElement;const N=L&&L.name&&L.name.name;if(N==="__OmT")return;if(typeof N==="string"&&Q[N])return;x(q,Z(M),B(M))},JSXFragment(q,M){x(q,Z(M),B(M))}}}})}}const K=G?["transform-react-jsx-source",V,z]:["transform-react-jsx-source",V];document.querySelectorAll('script[type="text/babel"],script[type="text/jsx"]').forEach((D,j)=>{const H=D.getAttribute("data-plugins")||"";const F=K.filter((P)=>H.indexOf(P)<0);if(F.length){D.setAttribute("data-plugins",H?`${H},${F.join(",")}`:F.join(","))}if(!D.hasAttribute("data-filename")){D.setAttribute("data-filename",D.getAttribute("src")||`inline-${j}`)}})});var v=window.parent;var g="not editable here — open the project in the Claude Design editor to save";var d=()=>Promise.resolve({persisted:false,noHost:true,reason:g});var S=d;var h="data/storage.json";var i=()=>{try{const W=new URL(document.baseURI);const V=W.pathname.match(/\/projects\/([^/]+)\/serve\//);if(V)return V[1];return W.hostname.split(".")[0]||""}catch{return location.hostname.split(".")[0]||""}};var o=()=>{try{const W=new URL(document.baseURI);const V=W.pathname.indexOf("/serve/");if(V>=0)return W.origin+W.pathname.slice(0,V+"/serve/".length)+h}catch{}return"./"+h};var I=null;var _=()=>{if(!I){I=fetch(o(),{cache:"no-store"}).then((W)=>{if(W.ok)return W.text();return W.status===404?"":null}).catch(()=>null).then((W)=>{if(W===null){I=null;return null}const V=new Map;if(!W)return V;let z;try{z=JSON.parse(W)}catch{console.warn("[omelette.storage] "+h+" is not valid JSON; treating the store as unreadable so a save cannot overwrite the "+"hand-edited bytes. Fix the JSON (or delete the file) to re-enable persistence.");I=null;return null}if(z===null||typeof z!=="object"||Array.isArray(z)){console.warn("[omelette.storage] "+h+" doesn't hold a JSON object; treating the store as unreadable so a save cannot "+"overwrite the hand-edited bytes. Make the top level a JSON object to re-enable persistence.");I=null;return null}const G=z;if("data"in G){const K=G.data;if(K===null||typeof K!=="object"||Array.isArray(K)){console.warn("[omelette.storage] "+h+' has a "data" field that is not a JSON object; treating the store as unreadable so a '+'save cannot overwrite the hand-edited bytes. Make "data" a JSON object to re-enable persistence.');I=null;return null}const D=G._meta;const j=D!==null&&typeof D==="object"?D.project:undefined;if(typeof j==="string"&&j!==""&&j!==i())return V;for(const H of Object.keys(K))V.set(H,K[H]);return V}for(const K of Object.keys(G)){if(K!=="_meta")V.set(K,G[K])}return V})}return I};var y=(W)=>S(h,JSON.stringify({_meta:{project:i(),version:1},data:Object.fromEntries(W)},null,2));var m=Promise.resolve();var T=(W)=>{const V=m.then(W);m=V.then(()=>{return},()=>{return});return V};var s=/sk-(?:ant-)?[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[a-z]-[A-Za-z0-9][A-Za-z0-9-]{9,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/;var a=/password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|credential/i;var r=(W,V,z)=>{if(s.test(V)||a.test(W)&&typeof z==="string"&&z.length>=8){console.warn('[omelette.storage] the value for "'+W+'" looks like a credential. The storage file is a plaintext project file — visible to '+"everyone with project access and copied when the project is duplicated. Do not store secrets here.")}};var l={persisted:false,reason:"could not load the existing store — not overwriting it"};var c={persisted:false,reason:"stored value changed since a failed read — re-read this key before saving"};var E=new Set;var t={get:(W)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.get: key must be a string"))}return T(_).then((V)=>{if(V===null){E.add(W);return null}E.delete(W);if(!V.has(W))return null;const z=V.get(W);return z==null?null:JSON.parse(JSON.stringify(z))})},set:(W,V)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.set: key must be a string"))}let z;try{z=JSON.stringify(V)}catch(K){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable ("+String(K)+")"))}if(z===undefined){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable"))}r(W,z,V);const G=JSON.parse(z);return T(()=>_().then((K)=>{if(K===null)return l;if(E.has(W)){if(K.has(W))return c;E.delete(W)}K.set(W,G);return y(K)}))},delete:(W)=>{if(typeof W!=="string"){return Promise.reject(new TypeError("storage.delete: key must be a string"))}return T(()=>_().then((V)=>{if(V===null)return l;if(E.has(W)){if(V.has(W))return c;E.delete(W)}V.delete(W);return y(V)}))},keys:()=>T(_).then((W)=>W===null?[]:Array.from(W.keys()))};window.omelette={writeFile:(W,V)=>S(W,V).then((z)=>{if(!z.persisted&&!z.noHost){throw new Error(z.reason||"write failed")}}),storage:t};if(v&&v!==window){const W=(J,Q)=>{try{v.postMessage({__omelette_log:true,type:J,data:Q},"*")}catch{}};["log","warn","error"].forEach((J)=>{const Q=console[J];console[J]=(...$)=>{const Y=$.map((Z)=>{try{return typeof Z==="object"?JSON.stringify(Z):String(Z)}catch{try{return String(Z)}catch{return"[unstringifiable]"}}}).join(" ");W(J,Y);Q.apply(console,$)}});window.addEventListener("error",(J)=>{const Q=J.target;if(Q&&Q!==window&&Q.tagName){const $=Q.src||Q.href||"";W("resource_error",`${Q.tagName} failed to load: ${$}`)}else{W("error",`${J.message||"Unknown error"} at ${J.filename||"?"}:${J.lineno||0}:${J.colno||0}`)}},true);window.addEventListener("unhandledrejection",(J)=>{const Q=J.reason;const $=Q instanceof Error?`${Q.message} ${Q.stack}`:String(Q);W("error",`Unhandled rejection: ${$}`)});window.addEventListener("click",(J)=>{if(J.defaultPrevented||J.button!==0)return;if(J.metaKey||J.ctrlKey||J.shiftKey||J.altKey)return;const Q=J.composedPath?J.composedPath():[];const $=["button","input","select","textarea","summary","label"];let Y=null;for(const x of Q){if(!(x instanceof Element))continue;if(x.localName==="a"){if(!(x instanceof HTMLAnchorElement))return;Y=x;break}if($.indexOf(x.localName)!==-1)return}if(!Y)return;if(Y.isContentEditable)return;const Z=Y.closest("[contenteditable]");if(Z&&Z.getAttribute("contenteditable")!=="false")return;const B=(Y.getAttribute("target")||"_self").toLowerCase();if(B!=="_self"&&B!=="_top"&&B!=="_parent")return;let U;try{U=new URL(Y.href)}catch{return}if(U.protocol!=="http:"&&U.protocol!=="https:")return;if(location.origin==="null")return;if(U.origin===location.origin)return;J.preventDefault();window.open(U.href,"_blank","noopener,noreferrer")});const V=()=>{try{v.postMessage({type:"omelette:height",height:document.documentElement.scrollHeight},"*")}catch{}};if(window.ResizeObserver)new ResizeObserver(V).observe(document.documentElement);const z=()=>{V();if(!document.querySelector('script[type="text/babel"],script[type="text/jsx"]'))return;const J=()=>document.getElementById("root")||document.querySelector("body > div[id]");const Q=J()?.firstElementChild??null;let $=0;const Y=()=>{const Z=J();if(Z&&Z.firstElementChild!==Q||++$>30){V();return}setTimeout(Y,100)};setTimeout(Y,100)};if(document.readyState==="complete")z();else window.addEventListener("load",z);const G={};let K=0;const D=(J)=>new Promise((Q,$)=>{if(!b.length){$(new Error("claude.complete: no parent origin"));return}const Y=`c${++K}`;const Z=()=>setTimeout(()=>{delete G[Y];$(new Error(`claude.complete: no data for ${O/1000}s`))},O);const B=Z();G[Y]={resolve:Q,reject:$,text:"",t:B,arm:Z};try{for(const U of b){v.postMessage({__om_api:true,id:Y,body:J},U)}}catch(U){clearTimeout(B);delete G[Y];$(U)}});const j=8;const H=async(J,Q)=>{if(!Array.isArray(J.messages)){throw new Error("claude.complete: tools require a messages array")}const $=J.messages.slice();const Y={...J,tools:J.tools.map((U)=>{if(U===null||typeof U!=="object")return U;const x={};for(const q of Object.keys(U)){if(typeof U[q]!=="function")x[q]=U[q]}return x})};const Z=Y.tool_choice;const B=Z!=null&&(Z.type==="any"||Z.type==="tool")?{...Y,tool_choice:Z.disable_parallel_tool_use!==undefined?{type:"auto",disable_parallel_tool_use:Z.disable_parallel_tool_use}:{type:"auto"}}:Y;for(let U=0;U<j;U++){const x=await D({...U===0?Y:B,messages:$});const q=x.message;const M=q&&Array.isArray(q.content)?q.content:null;const L=M?M.filter((X)=>X?.type==="tool_use"):[];if(q?.stop_reason!=="tool_use"||L.length===0){return x.text}const N=[];for(const X of L){const f=Q.get(X.name);if(!f){N.push({type:"tool_result",tool_use_id:X.id,content:`no handler for tool "${X.name}"`,is_error:true});continue}try{const C=await f(X.input);const w=typeof C==="string"?C:R(C)??"";N.push({type:"tool_result",tool_use_id:X.id,content:w})}catch(C){N.push({type:"tool_result",tool_use_id:X.id,content:String(C?.message??C??"tool handler failed"),is_error:true})}}$.push({role:"assistant",content:M},{role:"user",content:N})}throw new Error(`claude.complete: exceeded ${j} tool turns`)};window.claude={complete(J){const Q=J;if(Q!==null&&typeof Q==="object"&&Array.isArray(Q.tools)&&Q.tools.some(($)=>$!==null&&typeof $==="object"&&typeof $.run==="function")){const $=new Map;for(const Y of Q.tools){if(Y!==null&&typeof Y==="object"&&typeof Y.run==="function"){$.set(String(Y.name),Y.run)}}return H(Q,$)}return D(J).then(($)=>$.text)}};const F={};let P=0;S=(J,Q)=>new Promise(($)=>{if(!b.length){$({persisted:false,noHost:true,reason:g});return}const Y=`f${++P}`;const Z=setTimeout(()=>{delete F[Y];$({persisted:false,noHost:true,reason:g})},n);F[Y]={settle:$,t:Z};try{for(const B of b){v.postMessage({__om_file:true,id:Y,op:"write",path:J,content:Q},B)}}catch{clearTimeout(Z);delete F[Y];$({persisted:false,noHost:true,reason:g})}});const R=(J)=>{try{return JSON.stringify(J)}catch{return JSON.stringify(String(J))}};window.addEventListener("message",(J)=>{if(b.indexOf(J.origin)<0)return;if(J.source!==v)return;const Q=J.data;if(!Q)return;if(Q.type==="omelette-preview-refresh"){if(typeof Q.token!=="string"||!/^[0-9a-f.-]+(\.(rc|pr-[0-9]+))?(\.[0-9]+\.[0-9a-f]{16})?$/.test(Q.token))return;const Z=Math.max(1,Math.floor((Q.expiresAt||0)-Date.now()/1000));document.cookie="__Host-omelette-preview="+Q.token+"; Path=/; Secure; SameSite=None; Partitioned; Max-Age="+Z;return}if(Q.__om_file_r){const Z=F[Q.id];if(!Z)return;clearTimeout(Z.t);delete F[Q.id];Z.settle(Q.ok?{persisted:true}:{persisted:false,reason:Q.error||"write failed"});return}if(Q.__om_api_r){const Z=G[Q.id];if(!Z)return;if(Q.error!=null){clearTimeout(Z.t);delete G[Q.id];Z.reject(new Error(Q.error));return}if(Q.chunk!=null){clearTimeout(Z.t);Z.t=Z.arm();Z.text+=Q.chunk;return}if(Q.done){clearTimeout(Z.t);delete G[Q.id];Z.resolve({text:Q.text!=null?Q.text:Z.text,message:Q.message});return}return}if(!Q.__om_eval)return;const $=Q;const Y=(Z)=>{J.source.postMessage({...Z,__om_eval_r:1,id:$.id},J.origin)};try{const Z=(0,eval)($.code);if(Z&&typeof Z.then==="function"){Z.then((B)=>Y({ok:1,v:R(B)}),(B)=>Y({ok:0,e:String(B)}))}else{Y({ok:1,v:R(Z)})}}catch(Z){Y({ok:0,e:String(Z)})}})}})();
+</script>
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script src="image-slot.js"></script>
+<style>
+body{margin:0;background:#ffffff;font-family:"Pretendard Variable",Pretendard,system-ui,sans-serif}
+a{color:#111;text-decoration:none}a:hover{color:#777}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#ffffff;color:#111;display:flex;flex-direction:column">
+  <sc-if value="{{grainOn}}" hint-placeholder-val="{{ true }}">
+    <div style="position:fixed;inset:0;z-index:50;pointer-events:none;opacity:.03;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E&quot;)"></div>
+  </sc-if>
+  <header style="display:flex;justify-content:space-between;align-items:center;padding:26px 48px;border-bottom:1px solid #111">
+    <div onClick="{{goGallery}}" style="font-family:Archivo,sans-serif;font-weight:800;font-size:23px;letter-spacing:.01em;cursor:pointer;text-transform:uppercase">Chongwook Chung<span style="font-family:'Space Mono',monospace;font-weight:400;font-size:10px;letter-spacing:.12em;color:#888;margin-left:14px">PHOTO ARCHIVE — SEOUL</span></div>
+    <nav style="display:flex;gap:2px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em">
+      <sc-for list="{{navItems}}" as="n" hint-placeholder-count="4">
+        <span onClick="{{n.pick}}" style="cursor:pointer;padding:6px 12px;color:{{n.color}};background:{{n.bg}}">{{n.label}}</span>
+      </sc-for>
+    </nav>
+  </header>
+
+  <main style="flex:1;padding:0 48px 24px">
+  <sc-if value="{{isGallery}}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;gap:2px;padding:28px 0 40px;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;flex-wrap:wrap">
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="5">
+        <span onClick="{{c.pick}}" style="cursor:pointer;padding:6px 12px;border:1px solid #111;color:{{c.color}};background:{{c.bg}}">{{c.name}}</span>
+      </sc-for>
+    </div>
+    <sc-for list="{{years}}" as="y" hint-placeholder-count="2">
+      <div style="padding-bottom:8px">
+        <div style="display:flex;align-items:flex-end;gap:20px;padding-bottom:28px;border-top:1px solid #111;padding-top:18px">
+          <span style="font-family:Archivo,sans-serif;font-weight:800;font-size:76px;line-height:.9;letter-spacing:-.02em">{{y.year}}</span>
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;color:#888;padding-bottom:5px;text-transform:uppercase">{{y.note}}</span>
+          <span style="flex:1"></span>
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;color:#888;padding-bottom:5px">{{y.count}}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:26px;padding-bottom:40px">
+          <sc-for list="{{y.photos}}" as="p" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:{{p.mt}}px">
+              <div style="height:{{p.h}}px;background:#f0f0ee"><image-slot id="{{p.sid}}" shape="rect"></image-slot></div>
+              <sc-if value="{{showCaps}}" hint-placeholder-val="{{ true }}">
+                <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.08em;color:#888">{{p.cap}}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </sc-if>
+
+  <sc-if value="{{isSeries}}" hint-placeholder-val="{{ false }}">
+    <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:76px;letter-spacing:-.02em;padding:28px 0 36px;text-transform:uppercase">Series</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px 26px;padding-bottom:40px">
+      <sc-for list="{{seriesCards}}" as="s" hint-placeholder-count="4">
+        <div onClick="{{s.open}}" style="cursor:pointer;display:flex;flex-direction:column;gap:10px">
+          <div style="height:380px;background:#f0f0ee"><image-slot id="{{s.sid}}" shape="rect" placeholder="시리즈 대표작"></image-slot></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #111;padding-bottom:10px">
+            <span style="font-size:15px;font-weight:600">{{s.name}}</span>
+            <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:#888">{{s.meta}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isDetail}}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{goSeries}}" style="cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.1em;color:#888;padding:28px 0 30px">← SERIES</div>
+    <div style="display:flex;align-items:flex-end;gap:20px;padding-bottom:14px">
+      <span style="font-family:Archivo,sans-serif;font-weight:800;font-size:64px;line-height:1;letter-spacing:-.02em">{{detailName}}</span>
+      <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;color:#888;padding-bottom:6px;text-transform:uppercase">{{detailMeta}}</span>
+    </div>
+    <div style="font-size:13px;line-height:1.7;color:#555;max-width:520px;padding-bottom:44px">{{detailNote}}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:26px;padding-bottom:40px">
+      <sc-for list="{{detailPhotos}}" as="p" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:{{p.mt}}px">
+          <div style="height:{{p.h}}px;background:#f0f0ee"><image-slot id="{{p.sid}}" shape="rect"></image-slot></div>
+          <sc-if value="{{showCaps}}" hint-placeholder-val="{{ true }}">
+            <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.08em;color:#888">{{p.cap}}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isJournal}}" hint-placeholder-val="{{ false }}">
+    <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:76px;letter-spacing:-.02em;padding:28px 0 24px;text-transform:uppercase">Journal</div>
+    <div style="max-width:720px;display:flex;flex-direction:column">
+      <sc-for list="{{journal}}" as="j" hint-placeholder-count="3">
+        <div style="display:flex;gap:28px;padding:24px 0;border-top:1px solid #111;align-items:baseline">
+          <span style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:#888;flex:none;width:70px">{{j.date}}</span>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <span style="font-size:17px;font-weight:600">{{j.title}}</span>
+            <span style="font-size:13px;line-height:1.7;color:#555">{{j.line}}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isAbout}}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;gap:64px;padding:40px 0;flex-wrap:wrap">
+      <div style="width:360px;height:480px;flex:none;background:#f0f0ee"><image-slot id="p-about" shape="rect" placeholder="프로필 사진"></image-slot></div>
+      <div style="flex:1;min-width:320px;max-width:560px;display:flex;flex-direction:column;gap:24px">
+        <div style="font-family:Archivo,sans-serif;font-weight:800;font-size:46px;letter-spacing:-.01em;text-transform:uppercase">정총욱<span style="font-family:'Space Mono',monospace;font-weight:400;font-size:11px;letter-spacing:.12em;color:#888;margin-left:14px">CHONGWOOK CHUNG</span></div>
+        <div style="font-size:13.5px;line-height:1.9;color:#444">서울을 기반으로 인물과 거리를 기록합니다. 주로 흑백 필름으로 작업하며, 지나치는 사람들의 표정과 골목의 빛을 오래 들여다보는 일에 관심이 있습니다.</div>
+        <div style="font-size:13.5px;line-height:1.9;color:#444">이 사이트는 개인 아카이브이자, 앞으로의 작가 활동을 위한 기록입니다.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #111;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;color:#555">
+          <span>MAIL — hello@chongwook.kr</span>
+          <span>INSTAGRAM — @chongwook.film</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  </main>
+
+  <footer style="margin:0 48px;padding:18px 0 26px;border-top:1px solid #111;display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;color:#888">
+    <span>© 2026 CHONGWOOK CHUNG</span>
+    <span>SEOUL — 37.56°N 126.97°E</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showCaptions&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;갤러리&quot;},&quot;grain&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;분위기&quot;}}">
+class Component extends DCLogic {
+  state = { page: 'gallery', filter: 'all', open: null };
+  data() {
+    return [
+      { key: 'alley', name: '골목의 얼굴들', year: '2025', tag: 'B/W FILM', note: '이른 저녁의 골목에서 마주친 얼굴들. 흑백 필름으로 기록한 연작입니다.', photos: [
+        { sid: 'p-al-1', h: 420, cap: 'ALLEY_01 — B/W FILM' }, { sid: 'p-al-2', h: 420, cap: 'ALLEY_02' },
+        { sid: 'p-al-3', h: 300, cap: 'ALLEY_03' }, { sid: 'p-al-4', h: 300, cap: 'ALLEY_04' }] },
+      { key: 'seoul', name: '서울, 지나가는 사람들', year: '2024', tag: 'STREET', note: '도심을 스쳐가는 사람들의 순간. 거리에서 건진 기록.', photos: [
+        { sid: 'p-se-1', h: 360, cap: 'SEOUL_01' }, { sid: 'p-se-2', h: 360, cap: 'SEOUL_02' },
+        { sid: 'p-se-3', h: 300, cap: 'SEOUL_03' }] },
+      { key: 'portrait', name: '초상 연작', year: '2024', tag: 'PORTRAIT', note: '한 사람을 오래 바라보는 일. 자연광 초상 연작.', photos: [
+        { sid: 'p-po-1', h: 440, cap: 'PORTRAIT_01' }, { sid: 'p-po-2', h: 440, cap: 'PORTRAIT_02' }] },
+      { key: 'early', name: '이른 기록', year: '2023', tag: 'DOC', note: '사진을 시작하던 무렵의 기록들.', photos: [
+        { sid: 'p-ea-1', h: 340, cap: 'EARLY_01' }, { sid: 'p-ea-2', h: 340, cap: 'EARLY_02' }] },
+    ];
+  }
+  offset(list) { return list.map((p, i) => ({ ...p, mt: i % 2 === 1 ? 64 : 0 })); }
+  renderVals() {
+    const S = this.data();
+    const st = this.state;
+    const go = (page) => () => this.setState({ page, open: null });
+    const pages = [['gallery', 'GALLERY'], ['series', 'SERIES'], ['journal', 'JOURNAL'], ['about', 'ABOUT']];
+    const navItems = pages.map(([k, label]) => {
+      const on = st.page === k || (k === 'series' && st.page === 'detail');
+      return { label, pick: go(k), color: on ? '#ffffff' : '#111', bg: on ? '#111' : 'transparent' };
+    });
+    const chips = [{ key: 'all', name: 'ALL' }, ...S.map(s => ({ key: s.key, name: s.name }))].map(c => {
+      const on = st.filter === c.key;
+      return { name: c.name, pick: () => this.setState({ filter: c.key }), color: on ? '#ffffff' : '#111', bg: on ? '#111' : 'transparent' };
+    });
+    const bySel = st.filter === 'all' ? S : S.filter(s => s.key === st.filter);
+    const yearKeys = [...new Set(bySel.map(s => s.year))].sort().reverse();
+    const years = yearKeys.map(y => {
+      const ss = bySel.filter(s => s.year === y);
+      const photos = ss.flatMap(s => s.photos);
+      return { year: y, note: ss.map(s => s.name).join(' · '), count: String(photos.length).padStart(2, '0') + ' WORKS', photos: this.offset(photos) };
+    });
+    const seriesCards = S.map(s => ({
+      name: s.name, meta: s.year + ' · ' + s.tag, sid: 'p-cover-' + s.key,
+      open: () => this.setState({ page: 'detail', open: s.key }),
+    }));
+    const cur = S.find(s => s.key === st.open) || S[0];
+    const journal = [
+      { date: '2026.06', title: '여름의 현상 기록', line: 'Tri-X 다섯 롤. 골목 연작의 마지막 롤을 현상했다.' },
+      { date: '2026.03', title: '골목의 얼굴들, 마무리에 대하여', line: '연작을 끝내는 기준에 대한 짧은 메모.' },
+      { date: '2025.11', title: '겨울 초상 작업 노트', line: '자연광이 짧아지는 계절의 촬영 방식.' },
+    ];
+    return {
+      grainOn: this.props.grain ?? true,
+      showCaps: this.props.showCaptions ?? true,
+      navItems, chips, years, seriesCards, journal,
+      isGallery: st.page === 'gallery', isSeries: st.page === 'series',
+      isDetail: st.page === 'detail', isJournal: st.page === 'journal', isAbout: st.page === 'about',
+      goGallery: go('gallery'), goSeries: go('series'),
+      detailName: cur.name, detailMeta: cur.year + ' · ' + cur.tag, detailNote: cur.note,
+      detailPhotos: this.offset(cur.photos),
+    };
+  }
+}
+</script>
+</body>
+</html>
