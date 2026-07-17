@@ -53,6 +53,9 @@
     transition: background 0.15s, border-color 0.15s;
   }
   .btn:hover { background: #2e3340; border-color: #4a5060; }
+  .btn:focus-visible, .view-tabs button:focus-visible, .chip:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   .btn.primary { background: var(--accent); color: #1a1508; border-color: var(--accent); font-weight: 600; }
   .btn.primary:hover { background: #f2c463; }
   .input-bar .divider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
@@ -217,15 +220,20 @@
     .card .meta { padding: 8px 10px 10px; }
     .card .meta .desc { display: none; }
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+    .card:hover { transform: none; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>흑백 <span>컬러필터</span> 비교기</h1>
-  <p><b>컬러 사진</b>을 넣으면 레드·오렌지·옐로우·그린·블루 필터를 끼우고 흑백 필름으로 찍었을 때의
-  톤 차이를 한눈에 비교해 줍니다. 필터와 같은 색은 밝아지고 보색은 어두워집니다.
-  (이미 흑백인 사진은 색 정보가 없어 필터 차이가 나타나지 않아요.) 모든 처리는 브라우저 안에서만 이루어집니다.</p>
+  <p><b>컬러 사진</b>은 필터별 정확한 흑백 변환을, <b>흑백 사진</b>은 필터 효과 시뮬레이션을 보여줍니다.
+  레드·오렌지는 하늘을 어둡게(극적으로), 블루는 밝게(안개 느낌) 만드는 식의 톤 변화를 한눈에 비교하세요.
+  사진을 넣으면 자동으로 알맞은 모드로 처리하며, 모든 작업은 브라우저 안에서만 이루어집니다.</p>
 </header>
 
 <main>
@@ -247,9 +255,9 @@
   </div>
 
   <div id="grayWarn">
-    올린 사진에 <b>색 정보가 거의 없어서</b>(이미 흑백에 가까움) 필터별 차이가 나타나지 않습니다.
-    컬러필터는 원래 색이 있는 장면에서만 톤을 바꿀 수 있어요 —
-    <b>파란 하늘·녹색 나뭇잎·붉은 물체가 있는 컬러 사진</b>으로 시도해 보세요.
+    <b>흑백 시뮬레이션 모드</b> — 이 사진은 흑백이라 색을 되살릴 수 없어, 필터 효과를
+    <b>추정으로 재현</b>합니다. 하늘은 위치·밝기로 추정(상단의 밝은 영역)하고 필터별 대비·톤 커브를 적용하므로,
+    결과는 실제 필름과 다를 수 있습니다. 컬러 사진을 넣으면 <b>정확한 채널 변환</b>으로 자동 전환됩니다.
   </div>
 
   <div class="view-tabs" id="viewTabs">
@@ -286,51 +294,57 @@
 
 /* ──────────────────────────────────────────────
    필터 정의
-   실제 흑백 필름용 콘트라스트 필터(Wratten 번호)를
-   RGB 채널 가중치로 근사한다. 가중치 합은 1로 맞춰
-   실촬영에서 필터 팩터만큼 노출을 보정한 상태를 재현한다.
+   각 필터는 두 가지 방식으로 적용된다.
+   • weights: 컬러 사진용. 실제 필름 필터(Wratten 번호)를 RGB 채널
+     가중치로 근사한다. 가중치 합은 1로 맞춰 필터 팩터만큼 노출을
+     보정한 상태를 재현한다. → 물리적으로 정확한 변환.
+   • sim: 이미 흑백인 사진용. 색을 되살릴 수 없으므로 필터의
+     "특징적인 톤 변화"를 휴리스틱으로 재현한다.
+       sky = 하늘(상단의 밝은 영역) 밝기 보정(−어둡게 / +밝게)
+       con = 대비 배율(128 기준)   gam = 감마(밝기 곡선)
    ────────────────────────────────────────────── */
 const FILTERS = [
   {
-    id: "original", name: "원본 컬러", swatch: null, weights: null,
-    desc: "필터 비교의 기준이 되는 원본 컬러 사진입니다."
+    id: "original", name: "원본", swatch: null, weights: null, sim: null,
+    desc: "필터를 적용하지 않은 원본 사진입니다. (기준)"
   },
   {
     id: "none", name: "필터 없음", swatch: "#bfbfbf",
-    weights: [0.299, 0.587, 0.114],
+    weights: [0.299, 0.587, 0.114], sim: { sky: 0, con: 1.00, gam: 1.00 },
     desc: "표준 흑백 변환. 사람 눈의 밝기 감각(녹색에 민감)을 따릅니다."
   },
   {
     id: "yellow", name: "옐로우 (#8)", swatch: "#e8d44c",
-    weights: [0.45, 0.50, 0.05],
+    weights: [0.45, 0.50, 0.05], sim: { sky: -30, con: 1.06, gam: 1.00 },
     desc: "가장 무난한 풍경용 필터. 하늘이 살짝 어두워져 구름이 자연스럽게 살아납니다."
   },
   {
     id: "orange", name: "오렌지 (#16)", swatch: "#e88a3a",
-    weights: [0.65, 0.32, 0.03],
+    weights: [0.65, 0.32, 0.03], sim: { sky: -60, con: 1.13, gam: 0.97 },
     desc: "하늘을 꽤 어둡게 만들어 구름과 건물 질감을 강조합니다. 피부 잡티도 줄어듭니다."
   },
   {
     id: "red", name: "레드 (#25)", swatch: "#d94040",
-    weights: [0.90, 0.10, 0.00],
+    weights: [0.90, 0.10, 0.00], sim: { sky: -100, con: 1.24, gam: 0.93 },
     desc: "가장 극적인 필터. 파란 하늘이 거의 검게 떨어지고 붉은 피사체는 하얗게 뜹니다."
   },
   {
     id: "green", name: "그린 (#11)", swatch: "#5eb85e",
-    weights: [0.20, 0.68, 0.12],
+    weights: [0.20, 0.68, 0.12], sim: { sky: -18, con: 1.03, gam: 1.04 },
     desc: "나뭇잎과 풀을 밝게 표현해 식물의 톤을 분리합니다. 인물 피부는 약간 어두워집니다."
   },
   {
     id: "blue", name: "블루 (#47)", swatch: "#4a72d9",
-    weights: [0.10, 0.20, 0.70],
+    weights: [0.10, 0.20, 0.70], sim: { sky: 40, con: 0.85, gam: 1.08 },
     desc: "하늘은 하얗게 날리고 붉은색·피부는 어둡게. 안개 느낌 강조나 실험적 표현에 씁니다."
   }
 ];
 
 const MAX_SIZE = 1600;   // 처리용 최대 변 길이
 const state = {
-  source: null,          // 원본 컬러 캔버스 (다운스케일 완료)
+  source: null,          // 원본 캔버스 (다운스케일 완료)
   filtered: {},          // id → 캔버스
+  mode: "color",         // "color"(컬러 원본, 정확 변환) | "gray"(흑백 원본, 시뮬레이션)
   currentFilter: "none",
   view: "grid"
 };
@@ -362,6 +376,10 @@ function setSource(imgOrCanvas) {
   canvas.height = Math.round(h * scale);
   canvas.getContext("2d").drawImage(imgOrCanvas, 0, 0, canvas.width, canvas.height);
   state.source = canvas;
+  // 평균 채도가 낮으면(≈흑백) 시뮬레이션 모드, 아니면 정확 변환 모드
+  state.mode = measureColorfulness(canvas) < 8 ? "gray" : "color";
+  // 흑백 모드에는 '원본 컬러' 카드가 없으므로 현재 선택을 보정
+  if (state.mode === "gray" && state.currentFilter === "original") state.currentFilter = "none";
   processAll();
   render();
 }
@@ -386,10 +404,61 @@ function applyWeights(source, weights) {
   return out;
 }
 
+/* 이미 흑백인 사진에 필터 효과를 "시뮬레이션"한다.
+   색 정보가 없으므로 다음을 가정한다.
+   1) 하늘 추정: 이미지 상단(세로 위치)이면서 밝은 픽셀을 하늘로 본다.
+      → 필터의 sky 값만큼 밝기를 올리거나(파랑) 내린다(빨강·주황).
+   2) 톤 커브: 필터 특유의 대비(con)와 감마(gam)를 전체에 적용한다.
+   물리적으로 정확하지는 않지만 각 필터의 특징적인 "느낌"을 재현한다. */
+function applySimulation(source, sim) {
+  const out = document.createElement("canvas");
+  out.width = source.width;
+  out.height = source.height;
+  const ctx = out.getContext("2d");
+  ctx.drawImage(source, 0, 0);
+  if (!sim) return out; // 원본(기준)
+  const W = out.width, H = out.height;
+  const img = ctx.getImageData(0, 0, W, H);
+  const d = img.data;
+  const skyLimit = H * 0.6;                 // 상단 60%까지를 잠재적 하늘로
+  const smoothstep = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  for (let y = 0; y < H; y++) {
+    const vy = Math.max(0, 1 - y / skyLimit); // 위쪽일수록 1
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const L = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const skyW = vy * smoothstep(120, 205, L); // 위쪽 + 밝음 → 하늘일 가능성
+      let o = L + skyW * sim.sky;                // 하늘 보정
+      o = 128 + (o - 128) * sim.con;             // 대비
+      o = 255 * Math.pow(Math.min(1, Math.max(0, o / 255)), sim.gam); // 감마
+      o = o < 0 ? 0 : o > 255 ? 255 : o;
+      d[i] = d[i + 1] = d[i + 2] = o;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+// 현재 모드에 맞는 방식으로 필터 하나를 적용
+function applyFilter(source, f) {
+  return state.mode === "gray"
+    ? applySimulation(source, f.sim)
+    : applyWeights(source, f.weights);
+}
+
+// 현재 모드에서 화면에 노출할 필터 목록 (흑백 모드는 '원본 컬러' 제외)
+function activeFilters() {
+  return state.mode === "gray" ? FILTERS.filter((f) => f.id !== "original") : FILTERS;
+}
+
 function processAll() {
   state.filtered = {};
   for (const f of FILTERS) {
-    state.filtered[f.id] = applyWeights(state.source, f.weights);
+    // 'original'은 항상 원본 그대로 보관 (Space 홀드 비교용)
+    state.filtered[f.id] = applyFilter(state.source, f);
   }
 }
 
@@ -414,9 +483,8 @@ function measureColorfulness(source) {
 function render() {
   dropzone.classList.add("hidden");
   viewTabs.classList.add("visible");
-  // 평균 채도가 8 미만이면 사실상 흑백 → 필터 차이가 없음을 안내
-  const colorful = measureColorfulness(state.source);
-  $("#grayWarn").classList.toggle("visible", colorful < 8);
+  // 흑백 입력이면 시뮬레이션 모드임을 안내
+  $("#grayWarn").classList.toggle("visible", state.mode === "gray");
   renderGrid();
   renderChips();
   renderSingle();
@@ -425,7 +493,7 @@ function render() {
 
 function renderGrid() {
   gridView.innerHTML = "";
-  for (const f of FILTERS) {
+  for (const f of activeFilters()) {
     const card = document.createElement("div");
     card.className = "card";
     card.title = "클릭하면 단일 뷰로 크게 봅니다";
@@ -458,7 +526,7 @@ function renderGrid() {
 function renderChips() {
   const chips = $("#filterChips");
   chips.innerHTML = "";
-  FILTERS.forEach((f, idx) => {
+  activeFilters().forEach((f, idx) => {
     const chip = document.createElement("button");
     chip.className = "chip" + (f.id === state.currentFilter ? " active" : "");
     const swatchStyle = f.swatch
@@ -523,9 +591,10 @@ $("#tabSingle").addEventListener("click", () => setView("single"));
 
 document.addEventListener("keydown", (e) => {
   if (!state.source || state.view !== "single") return;
+  const list = activeFilters();
   const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= FILTERS.length) {
-    state.currentFilter = FILTERS[n - 1].id;
+  if (n >= 1 && n <= list.length) {
+    state.currentFilter = list[n - 1].id;
     renderSingle();
     renderChips();
   }
