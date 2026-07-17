@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>흑백 컬러필터 비교기</title>
+<style>
+  :root {
+    --bg: #16181d;
+    --surface: #1f2229;
+    --surface-2: #262a33;
+    --border: #343945;
+    --text: #e8eaf0;
+    --text-dim: #9aa1b0;
+    --accent: #e8b64c;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 20px 24px 12px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--text-dim); font-size: 0.86rem; margin-top: 4px; line-height: 1.5; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 8px 24px 48px; }
+
+  /* ── 입력 영역 ── */
+  .input-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin: 12px 0 16px;
+  }
+  .btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 16px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: #2e3340; border-color: #4a5060; }
+  .btn.primary { background: var(--accent); color: #1a1508; border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { background: #f2c463; }
+  .input-bar .divider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+  .input-bar .label { color: var(--text-dim); font-size: 0.82rem; }
+
+  /* ── 드롭존 ── */
+  #dropzone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 56px 24px;
+    text-align: center;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 16px;
+  }
+  #dropzone.dragover { border-color: var(--accent); background: rgba(232, 182, 76, 0.06); }
+  #dropzone .big { font-size: 1.05rem; color: var(--text); margin-bottom: 6px; }
+  #dropzone.hidden { display: none; }
+
+  /* ── 뷰 전환 탭 ── */
+  .view-tabs { display: none; gap: 6px; margin-bottom: 14px; }
+  .view-tabs.visible { display: flex; }
+  .view-tabs button {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .view-tabs button.active {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  /* ── 그리드 뷰 ── */
+  #gridView { display: none; }
+  #gridView.visible {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card canvas { width: 100%; display: block; aspect-ratio: 3 / 2; object-fit: cover; background: #000; }
+  .card .meta { padding: 10px 14px 12px; }
+  .card .meta .name { font-weight: 600; font-size: 0.92rem; display: flex; align-items: center; gap: 8px; }
+  .card .meta .desc { color: var(--text-dim); font-size: 0.78rem; margin-top: 3px; line-height: 1.45; }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.25); flex-shrink: 0; }
+
+  /* ── 단일 뷰 ── */
+  #singleView { display: none; }
+  #singleView.visible { display: block; }
+  .single-stage {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    text-align: center;
+  }
+  .single-stage canvas {
+    max-width: 100%;
+    max-height: 68vh;
+    border-radius: 6px;
+    background: #000;
+  }
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 15px;
+    font-size: 0.86rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .chip:hover { border-color: #4a5060; }
+  .chip.active { border-color: var(--accent); background: rgba(232, 182, 76, 0.12); }
+  .single-desc {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-top: 12px;
+    text-align: center;
+    min-height: 1.4em;
+    line-height: 1.5;
+  }
+  .single-actions { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+  .hint { color: var(--text-dim); font-size: 0.76rem; text-align: center; margin-top: 10px; }
+  kbd {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    font-family: inherit;
+  }
+
+  /* ── 카메라 모달 ── */
+  #cameraModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #cameraModal.visible { display: flex; }
+  .camera-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    max-width: 720px;
+    width: 100%;
+    text-align: center;
+  }
+  .camera-box video { width: 100%; border-radius: 8px; background: #000; }
+  .camera-box .row { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+
+  @media (max-width: 600px) {
+    header, main { padding-left: 14px; padding-right: 14px; }
+    #gridView.visible { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card .meta { padding: 8px 10px 10px; }
+    .card .meta .desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>흑백 <span>컬러필터</span> 비교기</h1>
+  <p>흑백 사진에서 레드·오렌지·옐로우·그린·블루 필터가 만드는 톤 차이를 한눈에 비교해 보세요.
+  필터와 같은 색은 밝아지고, 보색은 어두워집니다. 모든 처리는 브라우저 안에서만 이루어집니다.</p>
+</header>
+
+<main>
+  <div class="input-bar">
+    <button class="btn primary" id="btnUpload">사진 업로드</button>
+    <button class="btn" id="btnCamera">카메라 촬영</button>
+    <span class="divider"></span>
+    <span class="label">샘플:</span>
+    <button class="btn" data-sample="landscape">풍경</button>
+    <button class="btn" data-sample="stilllife">정물</button>
+    <button class="btn" data-sample="chart">컬러 차트</button>
+    <input type="file" id="fileInput" accept="image/*" hidden>
+    <input type="file" id="captureInput" accept="image/*" capture="environment" hidden>
+  </div>
+
+  <div id="dropzone">
+    <div class="big">사진을 여기로 드래그하거나 클릭해서 선택하세요</div>
+    <div>또는 위의 샘플 사진으로 바로 시작할 수 있어요</div>
+  </div>
+
+  <div class="view-tabs" id="viewTabs">
+    <button id="tabGrid" class="active">전체 비교</button>
+    <button id="tabSingle">단일 뷰</button>
+  </div>
+
+  <div id="gridView"></div>
+
+  <div id="singleView">
+    <div class="single-stage"><canvas id="singleCanvas"></canvas></div>
+    <div class="filter-chips" id="filterChips"></div>
+    <div class="single-desc" id="singleDesc"></div>
+    <div class="single-actions">
+      <button class="btn" id="btnHoldOriginal">꾹 누르면 원본 컬러</button>
+      <button class="btn" id="btnDownload">현재 이미지 저장</button>
+    </div>
+    <div class="hint">키보드 <kbd>1</kbd>–<kbd>7</kbd> 로 필터 전환, <kbd>Space</kbd> 를 누르는 동안 원본 컬러 표시</div>
+  </div>
+</main>
+
+<div id="cameraModal">
+  <div class="camera-box">
+    <video id="cameraVideo" autoplay playsinline></video>
+    <div class="row">
+      <button class="btn primary" id="btnCapture">촬영</button>
+      <button class="btn" id="btnCameraClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ──────────────────────────────────────────────
+   필터 정의
+   실제 흑백 필름용 콘트라스트 필터(Wratten 번호)를
+   RGB 채널 가중치로 근사한다. 가중치 합은 1로 맞춰
+   실촬영에서 필터 팩터만큼 노출을 보정한 상태를 재현한다.
+   ────────────────────────────────────────────── */
+const FILTERS = [
+  {
+    id: "original", name: "원본 컬러", swatch: null, weights: null,
+    desc: "필터 비교의 기준이 되는 원본 컬러 사진입니다."
+  },
+  {
+    id: "none", name: "필터 없음", swatch: "#bfbfbf",
+    weights: [0.299, 0.587, 0.114],
+    desc: "표준 흑백 변환. 사람 눈의 밝기 감각(녹색에 민감)을 따릅니다."
+  },
+  {
+    id: "yellow", name: "옐로우 (#8)", swatch: "#e8d44c",
+    weights: [0.45, 0.50, 0.05],
+    desc: "가장 무난한 풍경용 필터. 하늘이 살짝 어두워져 구름이 자연스럽게 살아납니다."
+  },
+  {
+    id: "orange", name: "오렌지 (#16)", swatch: "#e88a3a",
+    weights: [0.65, 0.32, 0.03],
+    desc: "하늘을 꽤 어둡게 만들어 구름과 건물 질감을 강조합니다. 피부 잡티도 줄어듭니다."
+  },
+  {
+    id: "red", name: "레드 (#25)", swatch: "#d94040",
+    weights: [0.90, 0.10, 0.00],
+    desc: "가장 극적인 필터. 파란 하늘이 거의 검게 떨어지고 붉은 피사체는 하얗게 뜹니다."
+  },
+  {
+    id: "green", name: "그린 (#11)", swatch: "#5eb85e",
+    weights: [0.20, 0.68, 0.12],
+    desc: "나뭇잎과 풀을 밝게 표현해 식물의 톤을 분리합니다. 인물 피부는 약간 어두워집니다."
+  },
+  {
+    id: "blue", name: "블루 (#47)", swatch: "#4a72d9",
+    weights: [0.10, 0.20, 0.70],
+    desc: "하늘은 하얗게 날리고 붉은색·피부는 어둡게. 안개 느낌 강조나 실험적 표현에 씁니다."
+  }
+];
+
+const MAX_SIZE = 1600;   // 처리용 최대 변 길이
+const state = {
+  source: null,          // 원본 컬러 캔버스 (다운스케일 완료)
+  filtered: {},          // id → 캔버스
+  currentFilter: "none",
+  view: "grid"
+};
+
+const $ = (sel) => document.querySelector(sel);
+const dropzone = $("#dropzone");
+const gridView = $("#gridView");
+const singleView = $("#singleView");
+const singleCanvas = $("#singleCanvas");
+const viewTabs = $("#viewTabs");
+
+/* ── 이미지 로드 ── */
+
+function loadFromFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); setSource(img); };
+  img.onerror = () => { URL.revokeObjectURL(url); alert("이미지를 불러오지 못했습니다."); };
+  img.src = url;
+}
+
+function setSource(imgOrCanvas) {
+  const w = imgOrCanvas.width || imgOrCanvas.videoWidth;
+  const h = imgOrCanvas.height || imgOrCanvas.videoHeight;
+  const scale = Math.min(1, MAX_SIZE / Math.max(w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w * scale);
+  canvas.height = Math.round(h * scale);
+  canvas.getContext("2d").drawImage(imgOrCanvas, 0, 0, canvas.width, canvas.height);
+  state.source = canvas;
+  processAll();
+  render();
+}
+
+/* ── 필터 처리 ── */
+
+function applyWeights(source, weights) {
+  const out = document.createElement("canvas");
+  out.width = source.width;
+  out.height = source.height;
+  const ctx = out.getContext("2d");
+  ctx.drawImage(source, 0, 0);
+  if (!weights) return out; // 원본 컬러
+  const imageData = ctx.getImageData(0, 0, out.width, out.height);
+  const d = imageData.data;
+  const [wr, wg, wb] = weights;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = Math.min(255, Math.max(0, wr * d[i] + wg * d[i + 1] + wb * d[i + 2]));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return out;
+}
+
+function processAll() {
+  state.filtered = {};
+  for (const f of FILTERS) {
+    state.filtered[f.id] = applyWeights(state.source, f.weights);
+  }
+}
+
+/* ── 렌더링 ── */
+
+function render() {
+  dropzone.classList.add("hidden");
+  viewTabs.classList.add("visible");
+  renderGrid();
+  renderChips();
+  renderSingle();
+  setView(state.view);
+}
+
+function renderGrid() {
+  gridView.innerHTML = "";
+  for (const f of FILTERS) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.title = "클릭하면 단일 뷰로 크게 봅니다";
+
+    const cv = document.createElement("canvas");
+    const src = state.filtered[f.id];
+    cv.width = src.width;
+    cv.height = src.height;
+    cv.getContext("2d").drawImage(src, 0, 0);
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const swatchHtml = f.swatch
+      ? `<span class="swatch" style="background:${f.swatch}"></span>`
+      : `<span class="swatch" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)"></span>`;
+    meta.innerHTML = `<div class="name">${swatchHtml}${f.name}</div><div class="desc">${f.desc}</div>`;
+
+    card.appendChild(cv);
+    card.appendChild(meta);
+    card.addEventListener("click", () => {
+      state.currentFilter = f.id;
+      setView("single");
+      renderSingle();
+      renderChips();
+    });
+    gridView.appendChild(card);
+  }
+}
+
+function renderChips() {
+  const chips = $("#filterChips");
+  chips.innerHTML = "";
+  FILTERS.forEach((f, idx) => {
+    const chip = document.createElement("button");
+    chip.className = "chip" + (f.id === state.currentFilter ? " active" : "");
+    const swatchStyle = f.swatch
+      ? `background:${f.swatch}`
+      : "background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)";
+    chip.innerHTML = `<span class="swatch" style="${swatchStyle}"></span>${f.name}`;
+    chip.title = `단축키 ${idx + 1}`;
+    chip.addEventListener("click", () => {
+      state.currentFilter = f.id;
+      renderSingle();
+      renderChips();
+    });
+    chips.appendChild(chip);
+  });
+}
+
+function renderSingle(overrideId) {
+  const id = overrideId || state.currentFilter;
+  const src = state.filtered[id];
+  if (!src) return;
+  singleCanvas.width = src.width;
+  singleCanvas.height = src.height;
+  singleCanvas.getContext("2d").drawImage(src, 0, 0);
+  const f = FILTERS.find((x) => x.id === state.currentFilter);
+  $("#singleDesc").textContent = f ? f.desc : "";
+}
+
+function setView(view) {
+  state.view = view;
+  $("#tabGrid").classList.toggle("active", view === "grid");
+  $("#tabSingle").classList.toggle("active", view === "single");
+  gridView.classList.toggle("visible", view === "grid");
+  singleView.classList.toggle("visible", view === "single");
+}
+
+/* ── 입력 이벤트 ── */
+
+$("#btnUpload").addEventListener("click", () => $("#fileInput").click());
+$("#fileInput").addEventListener("change", (e) => loadFromFile(e.target.files[0]));
+$("#captureInput").addEventListener("change", (e) => loadFromFile(e.target.files[0]));
+
+dropzone.addEventListener("click", () => $("#fileInput").click());
+["dragover", "dragenter"].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); })
+);
+document.addEventListener("drop", (e) => {
+  if (e.dataTransfer.files.length) loadFromFile(e.dataTransfer.files[0]);
+});
+document.addEventListener("paste", (e) => {
+  for (const item of e.clipboardData.items) {
+    if (item.type.startsWith("image/")) { loadFromFile(item.getAsFile()); break; }
+  }
+});
+
+$("#tabGrid").addEventListener("click", () => setView("grid"));
+$("#tabSingle").addEventListener("click", () => setView("single"));
+
+/* ── 단일 뷰: 단축키, 원본 홀드, 저장 ── */
+
+document.addEventListener("keydown", (e) => {
+  if (!state.source || state.view !== "single") return;
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= FILTERS.length) {
+    state.currentFilter = FILTERS[n - 1].id;
+    renderSingle();
+    renderChips();
+  }
+  if (e.code === "Space" && !e.repeat) { e.preventDefault(); renderSingle("original"); }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Space" && state.source && state.view === "single") renderSingle();
+});
+
+const holdBtn = $("#btnHoldOriginal");
+["mousedown", "touchstart"].forEach((ev) =>
+  holdBtn.addEventListener(ev, (e) => { e.preventDefault(); renderSingle("original"); })
+);
+["mouseup", "mouseleave", "touchend", "touchcancel"].forEach((ev) =>
+  holdBtn.addEventListener(ev, () => renderSingle())
+);
+
+$("#btnDownload").addEventListener("click", () => {
+  const src = state.filtered[state.currentFilter];
+  if (!src) return;
+  const a = document.createElement("a");
+  a.download = `bw-${state.currentFilter}.png`;
+  a.href = src.toDataURL("image/png");
+  a.click();
+});
+
+/* ── 카메라 ── */
+
+let cameraStream = null;
+
+$("#btnCamera").addEventListener("click", async () => {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $("#captureInput").click(); // getUserMedia 미지원 → 모바일 카메라 앱으로 폴백
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1920 } }
+    });
+    $("#cameraVideo").srcObject = cameraStream;
+    $("#cameraModal").classList.add("visible");
+  } catch (err) {
+    $("#captureInput").click(); // 권한 거부 등 → 파일 선택 폴백
+  }
+});
+
+function closeCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+  }
+  $("#cameraModal").classList.remove("visible");
+}
+
+$("#btnCapture").addEventListener("click", () => {
+  const video = $("#cameraVideo");
+  if (!video.videoWidth) return;
+  setSource(video);
+  closeCamera();
+});
+$("#btnCameraClose").addEventListener("click", closeCamera);
+
+/* ──────────────────────────────────────────────
+   샘플 이미지 — 캔버스로 생성.
+   필터 차이가 잘 드러나는 색(파란 하늘, 녹색 식물,
+   빨강·주황 피사체)을 골고루 배치한다.
+   ────────────────────────────────────────────── */
+
+function makeSampleLandscape() {
+  const w = 1200, h = 800;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d");
+
+  // 하늘
+  const sky = x.createLinearGradient(0, 0, 0, h * 0.62);
+  sky.addColorStop(0, "#1f5fc4");
+  sky.addColorStop(0.7, "#5b93de");
+  sky.addColorStop(1, "#a8c8ee");
+  x.fillStyle = sky;
+  x.fillRect(0, 0, w, h * 0.62);
+
+  // 구름
+  x.fillStyle = "rgba(255,255,255,0.92)";
+  const cloud = (cx, cy, s) => {
+    x.beginPath();
+    x.ellipse(cx, cy, 90 * s, 34 * s, 0, 0, Math.PI * 2);
+    x.ellipse(cx - 60 * s, cy + 12 * s, 60 * s, 26 * s, 0, 0, Math.PI * 2);
+    x.ellipse(cx + 65 * s, cy + 10 * s, 70 * s, 28 * s, 0, 0, Math.PI * 2);
+    x.fill();
+  };
+  cloud(300, 140, 1.15);
+  cloud(760, 220, 0.85);
+  cloud(1020, 110, 0.65);
+
+  // 원경 산
+  x.fillStyle = "#7d94ad";
+  x.beginPath();
+  x.moveTo(0, h * 0.62);
+  x.lineTo(200, h * 0.42); x.lineTo(430, h * 0.62);
+  x.lineTo(640, h * 0.46); x.lineTo(900, h * 0.62);
+  x.closePath(); x.fill();
+
+  // 초원
+  const grass = x.createLinearGradient(0, h * 0.58, 0, h);
+  grass.addColorStop(0, "#4f8f3a");
+  grass.addColorStop(1, "#2e6323");
+  x.fillStyle = grass;
+  x.fillRect(0, h * 0.58, w, h * 0.42);
+
+  // 나무
+  const tree = (tx, ty, s) => {
+    x.fillStyle = "#5d4023";
+    x.fillRect(tx - 9 * s, ty - 60 * s, 18 * s, 60 * s);
+    x.fillStyle = "#3f7d2e";
+    x.beginPath();
+    x.ellipse(tx, ty - 95 * s, 55 * s, 62 * s, 0, 0, Math.PI * 2);
+    x.fill();
+  };
+  tree(180, h * 0.86, 1.2);
+  tree(1050, h * 0.78, 0.9);
+
+  // 빨간 지붕 오두막
+  x.fillStyle = "#e8e2d4";
+  x.fillRect(560, h * 0.68, 170, 110);
+  x.fillStyle = "#b83226";
+  x.beginPath();
+  x.moveTo(540, h * 0.68); x.lineTo(645, h * 0.60); x.lineTo(750, h * 0.68);
+  x.closePath(); x.fill();
+  x.fillStyle = "#6b4a2b";
+  x.fillRect(625, h * 0.72, 40, 78);
+
+  // 꽃(빨강·노랑)
+  for (let i = 0; i < 60; i++) {
+    const fx = Math.random() * w;
+    const fy = h * (0.80 + Math.random() * 0.18);
+    x.fillStyle = i % 2 ? "#d43a3a" : "#e8c832";
+    x.beginPath();
+    x.arc(fx, fy, 5 + Math.random() * 4, 0, Math.PI * 2);
+    x.fill();
+  }
+  return c;
+}
+
+function makeSampleStillLife() {
+  const w = 1200, h = 800;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d");
+
+  // 배경 벽 / 파란 테이블보
+  const wall = x.createLinearGradient(0, 0, 0, h);
+  wall.addColorStop(0, "#8f8577");
+  wall.addColorStop(1, "#6e6659");
+  x.fillStyle = wall;
+  x.fillRect(0, 0, w, h * 0.55);
+  x.fillStyle = "#2c4f8f";
+  x.fillRect(0, h * 0.55, w, h * 0.45);
+  x.fillStyle = "#3a62ad";
+  x.beginPath();
+  x.ellipse(w / 2, h * 0.55, w * 0.55, 40, 0, 0, Math.PI * 2);
+  x.fill();
+
+  const shadow = (sx, sy, r) => {
+    x.fillStyle = "rgba(0,0,0,0.25)";
+    x.beginPath();
+    x.ellipse(sx, sy, r, r * 0.28, 0, 0, Math.PI * 2);
+    x.fill();
+  };
+  const sphere = (sx, sy, r, base, hi) => {
+    const g = x.createRadialGradient(sx - r * 0.4, sy - r * 0.45, r * 0.15, sx, sy, r);
+    g.addColorStop(0, hi);
+    g.addColorStop(1, base);
+    x.fillStyle = g;
+    x.beginPath();
+    x.arc(sx, sy, r, 0, Math.PI * 2);
+    x.fill();
+  };
+
+  // 빨간 사과 / 오렌지 / 청사과
+  shadow(420, 570, 100); sphere(420, 490, 95, "#a3241c", "#e05a4a");
+  shadow(640, 600, 85);  sphere(640, 530, 80, "#c96a14", "#f2a24a");
+  shadow(820, 560, 75);  sphere(820, 500, 70, "#5a8f28", "#9cc45a");
+
+  // 바나나
+  x.strokeStyle = "#e0bc32";
+  x.lineWidth = 46;
+  x.lineCap = "round";
+  x.beginPath();
+  x.arc(310, 470, 130, Math.PI * 0.15, Math.PI * 0.85);
+  x.stroke();
+  x.strokeStyle = "#c9a422";
+  x.lineWidth = 12;
+  x.beginPath();
+  x.arc(310, 470, 152, Math.PI * 0.3, Math.PI * 0.7);
+  x.stroke();
+
+  // 잎사귀
+  x.fillStyle = "#3f7d2e";
+  const leaf = (lx, ly, rot) => {
+    x.save();
+    x.translate(lx, ly);
+    x.rotate(rot);
+    x.beginPath();
+    x.ellipse(0, 0, 55, 20, 0, 0, Math.PI * 2);
+    x.fill();
+    x.restore();
+  };
+  leaf(455, 395, -0.5);
+  leaf(670, 445, 0.4);
+
+  // 보라 포도
+  for (let i = 0; i < 14; i++) {
+    const gx = 950 + (i % 4) * 34 + (Math.floor(i / 4) % 2) * 17;
+    const gy = 470 + Math.floor(i / 4) * 30;
+    sphere(gx, gy, 19, "#5a2d78", "#8f55b0");
+  }
+  return c;
+}
+
+function makeSampleChart() {
+  const w = 1200, h = 800;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  x.fillStyle = "#dcdcdc";
+  x.fillRect(0, 0, w, h);
+
+  const colors = [
+    ["#d43a3a", "빨강"], ["#e8823a", "주황"], ["#e8d43a", "노랑"],
+    ["#4faf4f", "초록"], ["#3ac8c8", "청록"], ["#3a6ad4", "파랑"],
+    ["#7a3ad4", "보라"], ["#d43a9e", "자홍"], ["#e8b48f", "피부톤"],
+    ["#8f5a3a", "갈색"], ["#ffffff", "흰색"], ["#1a1a1a", "검정"]
+  ];
+  const cols = 4, rows = 3;
+  const cw = w / cols, ch = h / rows;
+  x.textAlign = "center";
+  colors.forEach(([col, label], i) => {
+    const cx = (i % cols) * cw;
+    const cy = Math.floor(i / cols) * ch;
+    x.fillStyle = col;
+    x.fillRect(cx + 14, cy + 14, cw - 28, ch - 62);
+    x.fillStyle = "#333";
+    x.font = "600 26px sans-serif";
+    x.fillText(label, cx + cw / 2, cy + ch - 22);
+  });
+  return c;
+}
+
+const SAMPLES = {
+  landscape: makeSampleLandscape,
+  stilllife: makeSampleStillLife,
+  chart: makeSampleChart
+};
+
+document.querySelectorAll("[data-sample]").forEach((btn) =>
+  btn.addEventListener("click", () => setSource(SAMPLES[btn.dataset.sample]()))
+);
+</script>
+</body>
+</html>
