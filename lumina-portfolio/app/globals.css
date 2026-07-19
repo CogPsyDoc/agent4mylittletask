@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Referenced by tailwind.config.ts fontFamily.display / .body.
+       Fonts are loaded via the <link> in app/layout.tsx. */
+    --font-playfair: "Playfair Display";
+    --font-inter: "Inter";
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-on-surface font-body antialiased;
+  }
+
+  /* Bottom-border-only inputs to mimic high-end stationery. */
+  ::selection {
+    @apply bg-secondary-container text-on-secondary-container;
+  }
+}
+
+@layer components {
+  /* Typography helpers mapping the Ethereal Frame scale to reusable classes. */
+  .type-display {
+    @apply font-display text-display-lg-mobile md:text-display-lg;
+  }
+  .type-headline-md {
+    @apply font-display text-headline-md;
+  }
+  .type-headline-sm {
+    @apply font-display text-headline-sm;
+  }
+  .type-body-lg {
+    @apply font-body text-body-lg text-on-surface-variant;
+  }
+  .type-body-md {
+    @apply font-body text-body-md text-on-surface-variant;
+  }
+  .type-caption {
+    @apply font-body text-caption text-on-surface-variant;
+  }
+  .label-caps {
+    @apply font-body text-label-caps uppercase tracking-[0.1em];
+  }
+
+  /* Substantial vertical rhythm between major sections. */
+  .section {
+    @apply py-16 md:py-[128px];
+  }
+}
