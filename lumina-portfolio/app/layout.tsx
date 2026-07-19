@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import { site } from "@/site.config";
 
 export const metadata: Metadata = {
   title: {
-    default: "Lumina — Photography Portfolio",
-    template: "%s · Lumina",
+    default: `${site.brand} — Photography Portfolio`,
+    template: `%s · ${site.brand}`,
   },
-  description:
-    "Lumina is the portfolio of a fine-art photographer — a quiet gallery frame for high-end imagery.",
+  description: `${site.brand} — the portfolio of ${site.photographer}, ${site.role}.`,
 };
 
 export default function RootLayout({

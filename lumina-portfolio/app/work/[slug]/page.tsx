@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/Button";
-import Placeholder from "@/components/Placeholder";
+import Frame from "@/components/Frame";
 import Chip from "@/components/Chip";
 import { getProject, projects } from "@/lib/projects";
 
@@ -51,7 +51,12 @@ export default function ProjectDetailPage({
 
       {/* Hero frame — full-bleed within the framing margins. */}
       <section className="mt-12 md:mt-20">
-        <Placeholder tone={project.tone} ratio={project.ratio} />
+        <Frame
+          src={project.cover}
+          tone={project.tone}
+          ratio={project.coverRatio}
+          alt={project.title}
+        />
       </section>
 
       {/* Artist statement */}
@@ -75,7 +80,13 @@ export default function ProjectDetailPage({
             key={i}
             className={i % 3 === 2 ? "" : "md:mx-auto md:max-w-4xl"}
           >
-            <Placeholder tone={frame.tone} ratio={frame.ratio} label={frame.caption} />
+            <Frame
+              src={frame.src}
+              tone={frame.tone}
+              ratio={frame.ratio}
+              label={frame.caption}
+              alt={frame.caption}
+            />
             <figcaption className="mt-4 type-caption">
               {String(i + 1).padStart(2, "0")} — {frame.caption}
             </figcaption>

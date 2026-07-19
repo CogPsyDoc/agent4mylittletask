@@ -3,20 +3,22 @@
 import { useState } from "react";
 import { Button } from "@/components/Button";
 import { Field, TextArea } from "@/components/Field";
+import { site } from "@/site.config";
 
-const details = [
-  { label: "Studio", value: "Berlin · Lisbon" },
-  { label: "Email", value: "studio@lumina.photo" },
-  { label: "Representation", value: "East Wing Agency" },
-];
+const { contact } = site;
 
 export default function ContactPage() {
   const [sent, setSent] = useState(false);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // No backend wired in — the source design is a static export. Wire this
-    // to a form endpoint (e.g. a route handler or Formspree) to go live.
+    const endpoint: string = contact.formEndpoint;
+    if (endpoint.trim()) {
+      // A form endpoint (e.g. Formspree) is configured — actually send it.
+      const data = new FormData(e.currentTarget);
+      await fetch(endpoint, { method: "POST", body: data, headers: { Accept: "application/json" } });
+    }
+    // No endpoint configured → just show the thank-you state.
     setSent(true);
   }
 
@@ -25,22 +27,13 @@ export default function ContactPage() {
       <section className="pt-16 md:pt-[128px] grid grid-cols-1 gap-16 md:grid-cols-12">
         {/* Left column — invitation + details */}
         <div className="md:col-span-5">
-          <p className="label-caps text-on-surface-variant">Contact</p>
-          <h1 className="type-display mt-6 text-on-surface">
-            Let&rsquo;s make something quiet.
-          </h1>
-          <p className="type-body-lg mt-8 max-w-md">
-            Commissions, prints and exhibition enquiries are all welcome. Tell me
-            a little about the project and I&rsquo;ll reply within two working
-            days.
-          </p>
+          <p className="label-caps text-on-surface-variant">{contact.eyebrow}</p>
+          <h1 className="type-display mt-6 text-on-surface">{contact.headline}</h1>
+          <p className="type-body-lg mt-8 max-w-md">{contact.intro}</p>
 
           <dl className="mt-12 space-y-6">
-            {details.map((d) => (
-              <div
-                key={d.label}
-                className="border-t border-outline-variant/40 pt-4"
-              >
+            {contact.details.map((d, i) => (
+              <div key={i} className="border-t border-outline-variant/40 pt-4">
                 <dt className="label-caps text-on-surface-variant">{d.label}</dt>
                 <dd className="type-body-lg text-on-surface mt-1">{d.value}</dd>
               </div>

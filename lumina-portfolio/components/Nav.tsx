@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { site } from "@/site.config";
 
 const links = [
   { href: "/", label: "Work" },
@@ -28,7 +29,7 @@ export default function Nav() {
             className="font-display text-headline-sm tracking-tight text-on-surface"
             onClick={() => setOpen(false)}
           >
-            Lumina
+            {site.brand}
           </Link>
 
           {/* Desktop nav */}

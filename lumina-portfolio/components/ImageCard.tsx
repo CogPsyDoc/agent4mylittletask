@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Placeholder from "./Placeholder";
+import Frame from "./Frame";
 import type { Project } from "@/lib/projects";
 
 /**
@@ -10,9 +10,11 @@ export default function ImageCard({ project }: { project: Project }) {
   return (
     <Link href={`/work/${project.slug}`} className="group block">
       <div className="overflow-hidden transition-shadow duration-500 ease-editorial group-hover:shadow-lift">
-        <Placeholder
+        <Frame
+          src={project.cover}
           tone={project.tone}
-          ratio={project.ratio}
+          ratio={project.coverRatio}
+          alt={project.title}
           className="transition-transform duration-700 ease-editorial group-hover:scale-[1.02]"
         />
       </div>

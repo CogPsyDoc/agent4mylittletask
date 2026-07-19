@@ -1,10 +1,5 @@
 import Link from "next/link";
-
-const social = [
-  { href: "https://instagram.com", label: "Instagram" },
-  { href: "https://vsco.co", label: "VSCO" },
-  { href: "mailto:studio@lumina.photo", label: "Email" },
-];
+import { site } from "@/site.config";
 
 export default function Footer() {
   return (
@@ -12,14 +7,13 @@ export default function Footer() {
       <div className="mx-auto max-w-container px-margin-mobile lg:px-margin-desktop py-16">
         <div className="flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-display text-headline-md text-on-surface">Lumina</p>
-            <p className="type-body-md mt-3 max-w-sm">
-              A quiet gallery frame for high-end photography. Available for
-              commissions and exhibition worldwide.
+            <p className="font-display text-headline-md text-on-surface">
+              {site.brand}
             </p>
+            <p className="type-body-md mt-3 max-w-sm">{site.tagline}</p>
           </div>
-          <nav className="flex gap-8">
-            {social.map((s) => (
+          <nav className="flex flex-wrap gap-8">
+            {site.socials.map((s) => (
               <Link
                 key={s.label}
                 href={s.href}
@@ -31,7 +25,9 @@ export default function Footer() {
           </nav>
         </div>
         <div className="mt-12 flex flex-col gap-2 md:flex-row md:justify-between label-caps text-on-surface-variant/70">
-          <span>© {new Date().getFullYear()} Lumina Studio</span>
+          <span>
+            © {new Date().getFullYear()} {site.brand}
+          </span>
           <span>Design system · Ethereal Frame</span>
         </div>
       </div>
